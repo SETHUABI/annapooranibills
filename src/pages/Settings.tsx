@@ -306,42 +306,52 @@ export default function Settings() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Cloud Sync (Coming Soon)</CardTitle>
-              <CardDescription>
-                Sync your data with Google Sheets
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="sheets-url">Google Sheets URL</Label>
-                <Input
-                  id="sheets-url"
-                  value={settings.googleSheetsUrl || ''}
-                  onChange={(e) => setSettings({ ...settings, googleSheetsUrl: e.target.value })}
-                  placeholder="Enter your Google Sheets URL"
-                  disabled
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Auto Sync</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Automatically sync bills to Google Sheets
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.autoSync}
-                  onCheckedChange={(checked) => setSettings({ ...settings, autoSync: checked })}
-                  disabled
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Note: Cloud sync feature requires Google Apps Script configuration. 
-                Documentation will be provided in future updates.
-              </p>
-            </CardContent>
-          </Card>
+  <CardHeader>
+    <CardTitle>Cloud Sync</CardTitle>
+    <CardDescription>
+      Sync your bills automatically to Google Sheets every month
+    </CardDescription>
+  </CardHeader>
+
+  <CardContent className="space-y-4">
+
+    {/* GOOGLE SCRIPT URL */}
+    <div className="space-y-2">
+      <Label htmlFor="sheets-url">Google Sheets Script URL</Label>
+      <Input
+        id="sheets-url"
+        value={settings.googleSheetsUrl || ''}
+        onChange={(e) =>
+          setSettings({ ...settings, googleSheetsUrl: e.target.value })
+        }
+        placeholder="Paste Google Script Web App URL here"
+      />
+    </div>
+
+    {/* AUTO SYNC SWITCH */}
+    <div className="flex items-center justify-between">
+      <div className="space-y-0.5">
+        <Label>Enable Auto Sync</Label>
+        <p className="text-sm text-muted-foreground">
+          When enabled, new bills are pushed to Google Sheets automatically
+        </p>
+      </div>
+
+      <Switch
+        checked={settings.autoSync}
+        onCheckedChange={(checked) =>
+          setSettings({ ...settings, autoSync: checked })
+        }
+      />
+    </div>
+
+    <p className="text-xs text-muted-foreground">
+      Requires a Google Apps Script Web App linked to a Google Sheet.
+      Your POS will automatically create monthly sheets like 2025_Dec.
+    </p>
+  </CardContent>
+</Card>
+
         </TabsContent>
       </Tabs>
     </div>
