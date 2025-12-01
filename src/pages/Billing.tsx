@@ -26,8 +26,14 @@ export default function Billing() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
   const [settings, setSettings] = useState<AppSettings | null>(null);
+
   const { toast } = useToast();
   const user = getCurrentUser();
+
+  // DATE STATE ADDED
+  const today = new Date().toISOString().split("T")[0];
+  const [billDate, setBillDate] = useState(today);
+  const [manualDate, setManualDate] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -141,6 +147,7 @@ export default function Billing() {
         createdBy: user.id,
         createdByName: user.name,
         createdAt: new Date().toISOString(),
+        billDate, // DATE SAVED
         paymentMethod,
         customerName: customerName || undefined,
         customerPhone: customerPhone || undefined,
@@ -158,11 +165,13 @@ export default function Billing() {
         printBill(bill, settings);
       }
 
-      // Reset form
       setCart([]);
       setCustomerName('');
       setCustomerPhone('');
       setPaymentMethod('cash');
+      setBillDate(today);
+      setManualDate(false);
+
     } catch (error) {
       console.error('Failed to save bill:', error);
       toast({
@@ -185,15 +194,19 @@ export default function Billing() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Menu Items Section */}
+        
+        {/* MENU SECTION */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="flex gap-4">
+
+          {/* SEARCH + CATEGORY + DATE */}
+          <div className="flex gap-4 items-center">
             <Input
               placeholder="Search menu items..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1"
             />
+
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
               <SelectTrigger className="w-48">
                 <SelectValue />
@@ -206,8 +219,40 @@ export default function Billing() {
                 ))}
               </SelectContent>
             </Select>
+
+            {/* DATE BUTTON */}
+            <div className="flex items-center gap-2">
+              {manualDate ? (
+                <Input
+                  type="date"
+                  value={billDate}
+                  onChange={(e) => setBillDate(e.target.value)}
+                  className="w-40"
+                />
+              ) : (
+                <span className="text-sm font-semibold">{billDate}</span>
+              )}
+
+              {!manualDate ? (
+                <Button size="sm" variant="outline" onClick={() => setManualDate(true)}>
+                  Change Date
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setManualDate(false);
+                    setBillDate(today);
+                  }}
+                >
+                  Auto
+                </Button>
+              )}
+            </div>
           </div>
 
+          {/* MENU CARDS */}
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
             {filteredItems.map(item => (
               <Card
@@ -227,7 +272,7 @@ export default function Billing() {
           </div>
         </div>
 
-        {/* Cart Section */}
+        {/* CART */}
         <div className="space-y-4">
           <Card className="sticky top-6">
             <CardHeader>
@@ -237,6 +282,7 @@ export default function Billing() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              
               {cart.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
                   Cart is empty. Add items from the menu.
@@ -252,33 +298,23 @@ export default function Billing() {
                             {settings?.currency || '₹'}{item.price} × {item.quantity}
                           </p>
                         </div>
+
                         <div className="flex items-center gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => updateQuantity(item.menuItemId, -1)}
-                          >
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => updateQuantity(item.menuItemId, -1)}>
                             <Minus className="h-4 w-4" />
                           </Button>
+
                           <span className="w-8 text-center font-semibold">{item.quantity}</span>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => updateQuantity(item.menuItemId, 1)}
-                          >
+
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => updateQuantity(item.menuItemId, 1)}>
                             <Plus className="h-4 w-4" />
                           </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-destructive"
-                            onClick={() => removeFromCart(item.menuItemId)}
-                          >
+
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => removeFromCart(item.menuItemId)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
+
                         <div className="font-bold">
                           {settings?.currency || '₹'}{item.subtotal.toFixed(2)}
                         </div>
@@ -291,14 +327,17 @@ export default function Billing() {
                       <span>Subtotal</span>
                       <span className="font-semibold">{settings?.currency || '₹'}{subtotal.toFixed(2)}</span>
                     </div>
+
                     <div className="flex justify-between text-sm">
                       <span>CGST ({settings?.cgstRate || 2.5}%)</span>
                       <span className="font-semibold">{settings?.currency || '₹'}{cgst.toFixed(2)}</span>
                     </div>
+
                     <div className="flex justify-between text-sm">
                       <span>SGST ({settings?.sgstRate || 2.5}%)</span>
                       <span className="font-semibold">{settings?.currency || '₹'}{sgst.toFixed(2)}</span>
                     </div>
+
                     <div className="flex justify-between text-lg font-bold border-t pt-2">
                       <span>Total</span>
                       <span className="text-primary">{settings?.currency || '₹'}{total.toFixed(2)}</span>
@@ -315,6 +354,7 @@ export default function Billing() {
                         placeholder="Enter customer name"
                       />
                     </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="customer-phone">Phone (Optional)</Label>
                       <Input
@@ -324,6 +364,7 @@ export default function Billing() {
                         placeholder="Enter phone number"
                       />
                     </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="payment-method">Payment Method</Label>
                       <Select value={paymentMethod} onValueChange={(value: any) => setPaymentMethod(value)}>
@@ -340,18 +381,12 @@ export default function Billing() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button
-                      className="flex-1"
-                      variant="outline"
-                      onClick={() => handleSaveBill(false)}
-                    >
+                    <Button className="flex-1" variant="outline" onClick={() => handleSaveBill(false)}>
                       <Receipt className="mr-2 h-4 w-4" />
                       Save
                     </Button>
-                    <Button
-                      className="flex-1"
-                      onClick={() => handleSaveBill(true)}
-                    >
+
+                    <Button className="flex-1" onClick={() => handleSaveBill(true)}>
                       <Printer className="mr-2 h-4 w-4" />
                       Save & Print
                     </Button>
