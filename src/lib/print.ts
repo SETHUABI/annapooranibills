@@ -16,9 +16,10 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
     }
     
     body {
-      font-family: 'Courier New', monospace;
-      font-size: 12px;
-      line-height: 1.4;
+      font-family: 'Arial', sans-serif;   /* Bigger + Darker font */
+      font-size: 14px;                    /* 12 → 14 (1 size bigger) */
+      line-height: 1.45;
+      font-weight: 600;                   /* Darker */
       padding: 10px;
       margin: 0;
       width: ${width};
@@ -32,19 +33,21 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
     }
     
     .shop-name {
-      font-size: 16px;
-      font-weight: bold;
+      font-size: 20px;       /* Bigger */
+      font-weight: 900;      /* Very bold */
       margin-bottom: 5px;
     }
     
     .shop-info {
-      font-size: 10px;
+      font-size: 12px;       /* Slightly bigger */
+      font-weight: 600;      /* Darker */
       margin: 2px 0;
     }
     
     .bill-info {
       margin: 10px 0;
-      font-size: 11px;
+      font-size: 13px;       /* Bigger */
+      font-weight: 600;
     }
     
     .items {
@@ -57,7 +60,9 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
     .item {
       display: flex;
       justify-content: space-between;
-      margin: 5px 0;
+      margin: 6px 0;
+      font-size: 14px;       /* Bigger */
+      font-weight: 700;      /* Darker */
     }
     
     .item-name {
@@ -67,11 +72,13 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
     .item-qty {
       width: 40px;
       text-align: center;
+      font-weight: 700;
     }
     
     .item-price {
       width: 60px;
       text-align: right;
+      font-weight: 700;
     }
     
     .totals {
@@ -82,11 +89,13 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
       display: flex;
       justify-content: space-between;
       margin: 5px 0;
+      font-size: 14px;
+      font-weight: 700;      /* Darker */
     }
     
     .grand-total {
-      font-size: 14px;
-      font-weight: bold;
+      font-size: 18px;       /* Bigger */
+      font-weight: 900;      /* Very bold */
       border-top: 2px solid #000;
       padding-top: 5px;
       margin-top: 5px;
@@ -97,11 +106,13 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
       margin-top: 15px;
       padding-top: 10px;
       border-top: 2px dashed #000;
-      font-size: 11px;
+      font-size: 13px;       /* Bigger */
+      font-weight: 700;      /* Darker */
     }
     
     .thank-you {
-      font-weight: bold;
+      font-weight: 900;      /* Very bold */
+      font-size: 15px;       /* Bigger */
       margin: 10px 0;
     }
   </style>
