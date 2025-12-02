@@ -37,7 +37,6 @@ export default function Billing() {
   const [billDate, setBillDate] = useState(today);
   const [manualDate, setManualDate] = useState(false);
 
-  // BILL NUMBER STATE
   const [billNumber, setBillNumber] = useState("01");
 
   useEffect(() => {
@@ -166,7 +165,6 @@ export default function Billing() {
 
       await createBill(bill);
 
-      // SAVE LAST BILL NUMBER
       setLastBillNumber(billNumber);
 
       toast({
@@ -183,7 +181,6 @@ export default function Billing() {
       setBillDate(today);
       setManualDate(false);
 
-      // NEXT BILL NUMBER
       loadBillNumber();
 
     } catch (error) {
@@ -288,18 +285,17 @@ export default function Billing() {
             </div>
           </div>
 
-          {/* MENU CARDS */}
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {/* MENU CARDS — COMPACT VERSION */}
+          <div className="grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {filteredItems.map(item => (
               <Card
                 key={item.id}
-                className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
+                className="cursor-pointer hover:shadow-md transition-all duration-150"
                 onClick={() => addToCart(item)}
               >
-                <CardContent className="p-4">
-                  <h3 className="font-semibold text-lg mb-1">{item.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-2">{item.category}</p>
-                  <p className="text-2xl font-bold text-primary">
+                <CardContent className="p-2">
+                  <h3 className="font-semibold text-sm leading-tight">{item.name}</h3>
+                  <p className="text-xs text-primary font-bold mt-1">
                     {settings?.currency || '₹'}{item.price}
                   </p>
                 </CardContent>
