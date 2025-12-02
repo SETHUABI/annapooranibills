@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,12 +10,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { getAllMenuItems, createBill, getLastBillNumber, getSettings } from '@/lib/db';
+import { getAllMenuItems, createBill, getSettings } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { MenuItem, BillItem, Bill, AppSettings } from '@/types';
 import { Plus, Minus, Trash2, ShoppingCart, Printer, Receipt } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { printBill } from '@/lib/print';
+
+// NEW IMPORT
+import { getLastBillNumber, setLastBillNumber } from '@/lib/billCounter';
 
 export default function Billing() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -30,14 +33,23 @@ export default function Billing() {
   const { toast } = useToast();
   const user = getCurrentUser();
 
-  // DATE STATE ADDED
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-GB");
   const [billDate, setBillDate] = useState(today);
   const [manualDate, setManualDate] = useState(false);
 
+  // BILL NUMBER STATE
+  const [billNumber, setBillNumber] = useState("01");
+
   useEffect(() => {
     loadData();
+    loadBillNumber();
   }, []);
+
+  const loadBillNumber = () => {
+    const last = getLastBillNumber();
+    const next = String(Number(last) + 1).padStart(2, "0");
+    setBillNumber(next);
+  };
 
   const loadData = async () => {
     try {
@@ -48,7 +60,6 @@ export default function Billing() {
       setMenuItems(items.filter(item => item.isAvailable));
       setSettings(settingsData || null);
     } catch (error) {
-      console.error('Failed to load data:', error);
       toast({
         title: 'Error',
         description: 'Failed to load menu items',
@@ -133,12 +144,11 @@ export default function Billing() {
     }
 
     try {
-      const billNumber = await getLastBillNumber();
       const { subtotal, cgst, sgst, total } = calculateTotals();
 
       const bill: Bill = {
         id: `bill-${Date.now()}`,
-        billNumber,
+        billNumber: billNumber,
         items: cart,
         subtotal,
         cgst,
@@ -146,8 +156,8 @@ export default function Billing() {
         total,
         createdBy: user.id,
         createdByName: user.name,
-        createdAt: new Date().toISOString(),
-        billDate, // DATE SAVED
+        createdAt: billDate,
+        billDate,
         paymentMethod,
         customerName: customerName || undefined,
         customerPhone: customerPhone || undefined,
@@ -156,14 +166,15 @@ export default function Billing() {
 
       await createBill(bill);
 
+      // SAVE LAST BILL NUMBER
+      setLastBillNumber(billNumber);
+
       toast({
         title: 'Bill Saved',
         description: `Bill ${billNumber} saved successfully!`,
       });
 
-      if (shouldPrint) {
-        printBill(bill, settings);
-      }
+      if (shouldPrint) printBill(bill, settings);
 
       setCart([]);
       setCustomerName('');
@@ -172,8 +183,10 @@ export default function Billing() {
       setBillDate(today);
       setManualDate(false);
 
+      // NEXT BILL NUMBER
+      loadBillNumber();
+
     } catch (error) {
-      console.error('Failed to save bill:', error);
       toast({
         title: 'Error',
         description: 'Failed to save bill',
@@ -198,7 +211,7 @@ export default function Billing() {
         {/* MENU SECTION */}
         <div className="lg:col-span-2 space-y-4">
 
-          {/* SEARCH + CATEGORY + DATE */}
+          {/* SEARCH + CATEGORY + DATE + BILL NO */}
           <div className="flex gap-4 items-center">
             <Input
               placeholder="Search menu items..."
@@ -225,8 +238,12 @@ export default function Billing() {
               {manualDate ? (
                 <Input
                   type="date"
-                  value={billDate}
-                  onChange={(e) => setBillDate(e.target.value)}
+                  value={billDate.split("/").reverse().join("-")}
+                  onChange={(e) =>
+                    setBillDate(
+                      new Date(e.target.value).toLocaleDateString("en-GB")
+                    )
+                  }
                   className="w-40"
                 />
               ) : (
@@ -249,6 +266,25 @@ export default function Billing() {
                   Auto
                 </Button>
               )}
+            </div>
+
+            {/* BILL NUMBER MANUAL CHANGE */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">Bill No: {billNumber}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const newNo = prompt("Enter Bill Number", billNumber);
+                  if (newNo) {
+                    const formatted = newNo.padStart(2, "0");
+                    setBillNumber(formatted);
+                    setLastBillNumber(String(Number(formatted) - 1).padStart(2, "0"));
+                  }
+                }}
+              >
+                Change
+              </Button>
             </div>
           </div>
 
