@@ -1,3 +1,4 @@
+// src/pages/Billing.tsx
 import { useState, useEffect } from 'react'; 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,7 @@ import { printBill } from '@/lib/print';
 // NEW IMPORT
 import { getLastBillNumber, setLastBillNumber } from '@/lib/billCounter';
 
-// STATIC MENU LIST (FULL MENU)
+// STATIC MENU LIST (FULL MENU) - unchanged from your input
 const STATIC_MENU: MenuItem[] = [
   // STARTERS
   { id: "1", name: "Gobi Manchurian", price: 100, category: "Starters", isAvailable: true },
@@ -121,12 +122,13 @@ const STATIC_MENU: MenuItem[] = [
 export default function Billing() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<BillItem[]>([]);
+  // selectedCategory is still present but will be ignored when quickFilter active (Option A)
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
-  const [orderType, setOrderType] = useState<'dine-in' | 'parcel'>('dine-in');  // NEW
+  const [orderType, setOrderType] = useState<'dine-in' | 'parcel'>('dine-in');
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
   const { toast } = useToast();
@@ -137,6 +139,12 @@ export default function Billing() {
   const [manualDate, setManualDate] = useState(false);
 
   const [billNumber, setBillNumber] = useState("01");
+
+  // --- NEW: quick filter + sort state ---
+  // quickFilter: 'all' | 'egg' | 'chicken' | 'paneer'  (overrides category+search)
+  const [quickFilter, setQuickFilter] = useState<'all' | 'egg' | 'chicken' | 'paneer'>('all');
+  // sortOrder: 'asc' | 'desc' | null
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | null>(null);
 
   useEffect(() => {
     loadData();
@@ -151,6 +159,7 @@ export default function Billing() {
 
   const loadData = async () => {
     try {
+      // we use static menu as requested
       setMenuItems(STATIC_MENU);
 
       const settingsData = await getSettings();
@@ -167,12 +176,53 @@ export default function Billing() {
 
   const categories = ['all', ...Array.from(new Set(menuItems.map(item => item.category)))];
 
-  const filteredItems = menuItems.filter(item => {
-    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  /* -----------------------------
+     FILTERING (Option A behavior)
+     If quickFilter !== 'all' -> override category + search
+     Otherwise use category + search
+     ----------------------------- */
+  const applyQuickFilter = (items: MenuItem[]) => {
+    if (quickFilter === 'all') return items;
 
+    if (quickFilter === 'egg') {
+      return items.filter(i => /egg/i.test(i.name));
+    }
+    if (quickFilter === 'chicken') {
+      return items.filter(i => /chicken/i.test(i.name));
+    }
+    if (quickFilter === 'paneer' || quickFilter === 'panner') {
+      // match both "Panner" and "Paneer" (user uses "Panner" often)
+      return items.filter(i => /paneer|panner/i.test(i.name));
+    }
+    return items;
+  };
+
+  const applyCategorySearch = (items: MenuItem[]) => {
+    return items.filter(item => {
+      const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+      const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  };
+
+  const applySort = (items: MenuItem[]) => {
+    if (!sortOrder) return items;
+    const copy = [...items];
+    copy.sort((a, b) => a.name.localeCompare(b.name));
+    if (sortOrder === 'desc') copy.reverse();
+    return copy;
+  };
+
+  // pipeline: first either quickFilter OR category+search -> then sort
+  const filteredItems = applySort(
+    quickFilter === 'all'
+      ? applyCategorySearch(menuItems)
+      : applyQuickFilter(menuItems)
+  );
+
+  /* -----------------------------
+     CART OPERATIONS (unchanged)
+     ----------------------------- */
   const addToCart = (item: MenuItem) => {
     const existingItem = cart.find(cartItem => cartItem.menuItemId === item.id);
     
@@ -244,7 +294,7 @@ export default function Billing() {
       const { subtotal, cgst, sgst, total } = calculateTotals();
 
       const bill: Bill = {
-        id: `bill-${Date.now()}`,
+        id: bill-${Date.now()},
         billNumber: billNumber,
         items: cart,
         subtotal,
@@ -256,7 +306,7 @@ export default function Billing() {
         createdAt: billDate,
         billDate,
         paymentMethod,
-        orderType,     // NEW FIELD
+        orderType,     // NEW FIELD already supported in types if added
         customerName: customerName || undefined,
         customerPhone: customerPhone || undefined,
         syncedToCloud: false,
@@ -268,7 +318,7 @@ export default function Billing() {
 
       toast({
         title: 'Bill Saved',
-        description: `Bill ${billNumber} saved successfully!`,
+        description: Bill ${billNumber} saved successfully!,
       });
 
       if (shouldPrint) printBill(bill, settings);
@@ -293,6 +343,13 @@ export default function Billing() {
   };
 
   const { subtotal, cgst, sgst, total } = calculateTotals();
+
+  /* -----------------------------
+     UTILS: Veg/NonVeg badge
+     - NonVeg when name contains "chicken" or "egg"
+     - Veg otherwise
+     ----------------------------- */
+  const isNonVegItem = (name: string) => /chicken|egg/i.test(name);
 
   return (
     <div className="p-6 space-y-6">
@@ -385,163 +442,61 @@ export default function Billing() {
             </div>
           </div>
 
-          {/* MENU CARDS */}
+          {/* QUICK FILTER ROW (overrides category+search) */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={quickFilter === 'all' ? 'default' : 'outline'}
+              onClick={() => { setQuickFilter('all'); setSortOrder(null); }}
+            >
+              All Items
+            </Button>
+
+            <Button
+              variant={quickFilter === 'egg' ? 'default' : 'outline'}
+              onClick={() => { setQuickFilter('egg'); setSortOrder(null); }}
+            >
+              Egg Items
+            </Button>
+
+            <Button
+              variant={quickFilter === 'chicken' ? 'default' : 'outline'}
+              onClick={() => { setQuickFilter('chicken'); setSortOrder(null); }}
+            >
+              Chicken Items
+            </Button>
+
+            <Button
+              variant={quickFilter === 'paneer' ? 'default' : 'outline'}
+              onClick={() => { setQuickFilter('paneer'); setSortOrder(null); }}
+            >
+              Paneer Items
+            </Button>
+
+            <div className="ml-4 flex items-center gap-2">
+              <Button
+                variant={sortOrder === 'asc' ? 'default' : 'outline'}
+                onClick={() => setSortOrder('asc')}
+              >
+                A → Z
+              </Button>
+
+              <Button
+                variant={sortOrder === 'desc' ? 'default' : 'outline'}
+                onClick={() => setSortOrder('desc')}
+              >
+                Z → A
+              </Button>
+            </div>
+          </div>
+
+          {/* MENU CARDS — COMPACT VERSION */}
           <div className="grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {filteredItems.map(item => (
               <Card
                 key={item.id}
-                className="cursor-pointer hover:shadow-md transition-all duration-150"
+                className="cursor-pointer hover:shadow-md transition-all duration-150 relative"
                 onClick={() => addToCart(item)}
               >
                 <CardContent className="p-2">
-                  <h3 className="font-semibold text-sm leading-tight">{item.name}</h3>
-                  <p className="text-xs text-primary font-bold mt-1">
-                    {settings?.currency || '₹'}{item.price}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        {/* CART */}
-        <div className="space-y-4">
-          <Card className="sticky top-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" />
-                Current Order
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              
-              {cart.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  Cart is empty. Add items from the menu.
-                </p>
-              ) : (
-                <>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {cart.map(item => (
-                      <div key={item.menuItemId} className="flex items-center gap-2 p-2 rounded bg-muted">
-                        <div className="flex-1">
-                          <p className="font-semibold text-sm">{item.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {settings?.currency || '₹'}{item.price} × {item.quantity}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => updateQuantity(item.menuItemId, -1)}>
-                            <Minus className="h-4 w-4" />
-                          </Button>
-
-                          <span className="w-8 text-center font-semibold">{item.quantity}</span>
-
-                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => updateQuantity(item.menuItemId, 1)}>
-                            <Plus className="h-4 w-4" />
-                          </Button>
-
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => removeFromCart(item.menuItemId)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                        <div className="font-bold">
-                          {settings?.currency || '₹'}{item.subtotal.toFixed(2)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="space-y-2 border-t pt-4">
-                    <div className="flex justify-between text-sm">
-                      <span>Subtotal</span>
-                      <span className="font-semibold">{settings?.currency || '₹'}{subtotal.toFixed(2)}</span>
-                    </div>
-
-                    <div className="flex justify-between text-sm">
-                      <span>CGST ({settings?.cgstRate || 2.5}%)</span>
-                      <span className="font-semibold">{settings?.currency || '₹'}{cgst.toFixed(2)}</span>
-                    </div>
-
-                    <div className="flex justify-between text-sm">
-                      <span>SGST ({settings?.sgstRate || 2.5}%)</span>
-                      <span className="font-semibold">{settings?.currency || '₹'}{sgst.toFixed(2)}</span>
-                    </div>
-
-                    <div className="flex justify-between text-lg font-bold border-t pt-2">
-                      <span>Total</span>
-                      <span className="text-primary">{settings?.currency || '₹'}{total.toFixed(2)}</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label>Customer Name (Optional)</Label>
-                      <Input
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="Enter customer name"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Phone (Optional)</Label>
-                      <Input
-                        value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
-                        placeholder="Enter phone number"
-                      />
-                    </div>
-
-                    {/* PAYMENT METHOD */}
-                    <div className="space-y-2">
-                      <Label>Payment Method</Label>
-                      <Select value={paymentMethod} onValueChange={(value: any) => setPaymentMethod(value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cash">Cash</SelectItem>
-                          <SelectItem value="card">Card</SelectItem>
-                          <SelectItem value="upi">UPI</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* NEW: DINE-IN OR PARCEL */}
-                    <div className="space-y-2">
-                      <Label>Order Type</Label>
-                      <Select value={orderType} onValueChange={(value: any) => setOrderType(value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="dine-in">Dine-In</SelectItem>
-                          <SelectItem value="parcel">Parcel</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button className="flex-1" variant="outline" onClick={() => handleSaveBill(false)}>
-                      <Receipt className="mr-2 h-4 w-4" />
-                      Save
-                    </Button>
-
-                    <Button className="flex-1" onClick={() => handleSaveBill(true)}>
-                      <Printer className="mr-2 h-4 w-4" />
-                      Save & Print
-                    </Button>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
-}
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-sm leadin
