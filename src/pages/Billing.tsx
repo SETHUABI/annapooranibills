@@ -1,79 +1,142 @@
-import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
+import { useState, useEffect } from 'react'; 
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { 
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectItem,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { createBill, getSettings } from '@/lib/db';   // REMOVED getAllMenuItems (we use static menu)
+import { getCurrentUser } from '@/lib/auth';
+import { MenuItem, BillItem, Bill, AppSettings } from '@/types';
+import { Plus, Minus, Trash2, ShoppingCart, Printer, Receipt } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { printBill } from '@/lib/print';
 
-import {
-  getAllMenuItems,
-  createBill,
-  getSettings,
-} from "@/lib/db";
+// NEW IMPORT
+import { getLastBillNumber, setLastBillNumber } from '@/lib/billCounter';
 
-import { getCurrentUser } from "@/lib/auth";
-import { MenuItem, BillItem, Bill, AppSettings } from "@/types";
-import { ShoppingCart, Minus, Plus, Trash2, Printer, Receipt, Calendar, Hash } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { printBill } from "@/lib/print";
+// STATIC MENU LIST (FULL MENU)
+const STATIC_MENU: MenuItem[] = [
+  // STARTERS
+  { id: "1", name: "Gobi Manchurian", price: 100, category: "Starters", isAvailable: true },
+  { id: "2", name: "Gobi Masala", price: 100, category: "Starters", isAvailable: true },
+  { id: "3", name: "Mushroom Fry", price: 100, category: "Starters", isAvailable: true },
+  { id: "4", name: "Mushroom Manchurian", price: 120, category: "Starters", isAvailable: true },
+  { id: "5", name: "Mushroom Pepper Fry", price: 120, category: "Starters", isAvailable: true },
+  { id: "6", name: "Chilly Chicken", price: 80, category: "Starters", isAvailable: true },
+  { id: "7", name: "Gobi Chilly", price: 70, category: "Starters", isAvailable: true },
+  { id: "8", name: "Mushroom Chilly", price: 70, category: "Starters", isAvailable: true },
+  { id: "9", name: "Boiled Egg", price: 15, category: "Starters", isAvailable: true },
+  { id: "10", name: "Omelette", price: 15, category: "Starters", isAvailable: true },
+  { id: "11", name: "Kalaki", price: 15, category: "Starters", isAvailable: true },
+  { id: "12", name: "Full Boil", price: 15, category: "Starters", isAvailable: true },
+  { id: "13", name: "Egg Poriyal", price: 25, category: "Starters", isAvailable: true },
+  { id: "14", name: "Kullumbu Kalaki", price: 15, category: "Starters", isAvailable: true },
 
-import { getLastBillNumber, setLastBillNumber } from "@/lib/billCounter";
+  // TIFFEN
+  { id: "15", name: "Tiffen", price: 50, category: "Tiffen", isAvailable: true },
+  { id: "16", name: "Amount", price: 10, category: "Tiffen", isAvailable: true },
+  { id: "17", name: "Pongal", price: 50, category: "Tiffen", isAvailable: true },
+  { id: "18", name: "Poori", price: 25, category: "Tiffen", isAvailable: true },
 
-/* FIXED CATEGORY ORDER */
-const CATEGORY_ORDER = [
-  "TIFFEN",
-  "DOSA",
-  "BIRYANI",
-  "FRIED RICE",
-  "PAROTTA",
-  "NOODLES",
-  "GOBI STARTERS",
-  "MUSHROOM STARTERS",
-  "VEG GRAVY",
-  "CHILLY SPECIAL",
-  "EGG ITEMS",
-  "CHICKEN GRAVY",
+  // DOSA
+  { id: "19", name: "Dosa", price: 15, category: "Dosa", isAvailable: true },
+  { id: "20", name: "Kal Dosa", price: 15, category: "Dosa", isAvailable: true },
+  { id: "21", name: "Egg Dosa", price: 30, category: "Dosa", isAvailable: true },
+  { id: "22", name: "Chicken Roast", price: 120, category: "Dosa", isAvailable: true },
+  { id: "23", name: "Egg Kal Dosa", price: 30, category: "Dosa", isAvailable: true },
+  { id: "24", name: "Egg Roast", price: 70, category: "Dosa", isAvailable: true },
+  { id: "25", name: "Ghee Dosa", price: 40, category: "Dosa", isAvailable: true },
+  { id: "26", name: "Ghee Roast", price: 70, category: "Dosa", isAvailable: true },
+  { id: "27", name: "Roast", price: 50, category: "Dosa", isAvailable: true },
+  { id: "28", name: "Uthappam", price: 30, category: "Dosa", isAvailable: true },
+  { id: "29", name: "Kari Dosa", price: 120, category: "Dosa", isAvailable: true },
+  { id: "30", name: "Podi Dosa", price: 30, category: "Dosa", isAvailable: true },
+  { id: "31", name: "Podi Roast", price: 70, category: "Dosa", isAvailable: true },
+  { id: "32", name: "Masala Roast", price: 80, category: "Dosa", isAvailable: true },
+  { id: "33", name: "Mushroom Roast", price: 100, category: "Dosa", isAvailable: true },
+  { id: "34", name: "Onion Dosa", price: 30, category: "Dosa", isAvailable: true },
+  { id: "35", name: "Onion Kal Dosa", price: 30, category: "Dosa", isAvailable: true },
+  { id: "36", name: "Onion Roast", price: 70, category: "Dosa", isAvailable: true },
+  { id: "37", name: "Onion Uthappam", price: 70, category: "Dosa", isAvailable: true },
+  { id: "38", name: "Panner Roast", price: 120, category: "Dosa", isAvailable: true },
+
+  // RICE
+  { id: "39", name: "Meals", price: 70, category: "Rice", isAvailable: true },
+  { id: "40", name: "Tomato Rice", price: 50, category: "Rice", isAvailable: true },
+
+  // BIRYANI
+  { id: "41", name: "Egg Biryani", price: 80, category: "Biryani", isAvailable: true },
+  { id: "42", name: "Chicken Biryani", price: 100, category: "Biryani", isAvailable: true },
+  { id: "43", name: "MT Biryani", price: 70, category: "Biryani", isAvailable: true },
+  { id: "44", name: "Veg Biryani", price: 60, category: "Biryani", isAvailable: true },
+
+  // PAROTTA
+  { id: "45", name: "Bun Parotta", price: 20, category: "Parotta", isAvailable: true },
+  { id: "46", name: "Parotta", price: 15, category: "Parotta", isAvailable: true },
+  { id: "47", name: "Kothu Parotta", price: 70, category: "Parotta", isAvailable: true },
+  { id: "48", name: "Chappathi", price: 15, category: "Parotta", isAvailable: true },
+  { id: "49", name: "Chicken Kothu Parotta", price: 120, category: "Parotta", isAvailable: true },
+  { id: "50", name: "Egg Lappa", price: 80, category: "Parotta", isAvailable: true },
+  { id: "51", name: "Chicken Lappa", price: 120, category: "Parotta", isAvailable: true },
+  { id: "52", name: "Veechu Parotta", price: 20, category: "Parotta", isAvailable: true },
+  { id: "53", name: "Egg Veechu Parotta", price: 40, category: "Parotta", isAvailable: true },
+  { id: "54", name: "Chilly Parotta", price: 50, category: "Parotta", isAvailable: true },
+  { id: "55", name: "Chicken Leaf Parotta", price: 150, category: "Parotta", isAvailable: true },
+
+  // NOODLES
+  { id: "56", name: "Chicken Noodles", price: 100, category: "Noodles", isAvailable: true },
+  { id: "57", name: "Veg Noodles", price: 70, category: "Noodles", isAvailable: true },
+  { id: "58", name: "Egg Noodles", price: 80, category: "Noodles", isAvailable: true },
+  { id: "59", name: "Gobi Noodles", price: 90, category: "Noodles", isAvailable: true },
+  { id: "60", name: "Mushroom Noodles", price: 100, category: "Noodles", isAvailable: true },
+  { id: "61", name: "Panner Noodles", price: 100, category: "Noodles", isAvailable: true },
+
+  // FRIED RICE
+  { id: "62", name: "Chicken Rice", price: 100, category: "Fried Rice", isAvailable: true },
+  { id: "63", name: "Egg Rice", price: 80, category: "Fried Rice", isAvailable: true },
+  { id: "64", name: "Jeera Rice", price: 90, category: "Fried Rice", isAvailable: true },
+  { id: "65", name: "Gobi Rice", price: 90, category: "Fried Rice", isAvailable: true },
+  { id: "66", name: "Veg Rice", price: 70, category: "Fried Rice", isAvailable: true },
+  { id: "67", name: "Mushroom Rice", price: 100, category: "Fried Rice", isAvailable: true },
+  { id: "68", name: "Panner Rice", price: 100, category: "Fried Rice", isAvailable: true },
+
+  // VEG GRAVY
+  { id: "69", name: "Mushroom Gravy", price: 120, category: "Veg Gravy", isAvailable: true },
+  { id: "70", name: "Panner Butter Masala", price: 120, category: "Veg Gravy", isAvailable: true },
+  { id: "71", name: "Panner Pepper Fry", price: 120, category: "Veg Gravy", isAvailable: true },
+
+  // CHICKEN GRAVY
+  { id: "72", name: "Butter Chicken Gravy", price: 150, category: "Chicken Gravy", isAvailable: true },
+  { id: "73", name: "Pallipalayam Chicken Gravy", price: 140, category: "Chicken Gravy", isAvailable: true },
+  { id: "74", name: "Pepper Chicken Gravy", price: 140, category: "Chicken Gravy", isAvailable: true },
+  { id: "75", name: "Chicken Fry", price: 120, category: "Chicken Gravy", isAvailable: true },
 ];
 
 export default function Billing() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<BillItem[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
+  const [settings, setSettings] = useState<AppSettings | null>(null);
 
-  /* DATE CONTROL */
-  const todayFull = new Date();
-  const [billDate, setBillDate] = useState(
-    todayFull.toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true })
-  );
+  const { toast } = useToast();
+  const user = getCurrentUser();
+
+  const today = new Date().toLocaleDateString("en-GB");
+  const [billDate, setBillDate] = useState(today);
   const [manualDate, setManualDate] = useState(false);
 
-  /* BILL NUMBER CONTROL */
   const [billNumber, setBillNumber] = useState("01");
 
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("cash");
-
-  /* ORDER TYPE */
-  const [orderType, setOrderType] = useState<"dine-in" | "parcel">("dine-in");
-
-  const [settings, setSettings] = useState<AppSettings | null>(null);
-  const user = getCurrentUser();
-  const { toast } = useToast();
-
-  /* LOAD DATA */
   useEffect(() => {
     loadData();
     loadBillNumber();
@@ -87,352 +150,382 @@ export default function Billing() {
 
   const loadData = async () => {
     try {
-      const [items, settingsData] = await Promise.all([
-        getAllMenuItems(),
-        getSettings(),
-      ]);
+      // LOAD STATIC MENU
+      setMenuItems(STATIC_MENU);
 
-      setMenuItems(items.filter((x) => x.isAvailable));
+      const settingsData = await getSettings();
       setSettings(settingsData || null);
-    } catch {
-      toast({ title: "Error", description: "Failed to load menu", variant: "destructive" });
+
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load menu items',
+        variant: 'destructive',
+      });
     }
   };
 
-  /* CATEGORY GROUPING */
-  const dbCategories = Array.from(new Set(menuItems.map((x) => x.category)));
-  const sortedCategories = [
-    "all",
-    ...CATEGORY_ORDER.filter((x) => dbCategories.includes(x)),
-    ...dbCategories.filter((x) => !CATEGORY_ORDER.includes(x)),
-  ];
+  const categories = ['all', ...Array.from(new Set(menuItems.map(item => item.category)))];
 
-  const filtered = menuItems.filter((item) => {
-    const c = selectedCategory === "all" || item.category === selectedCategory;
-    const s = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return c && s;
+  const filteredItems = menuItems.filter(item => {
+    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
   });
 
-  const grouped = sortedCategories
-    .filter((c) => c !== "all")
-    .map((c) => ({ category: c, items: filtered.filter((x) => x.category === c) }));
-
-  /* CART LOGIC */
   const addToCart = (item: MenuItem) => {
-    const f = cart.find((x) => x.menuItemId === item.id);
-    if (f) {
-      setCart(
-        cart.map((x) =>
-          x.menuItemId === item.id
-            ? { ...x, quantity: x.quantity + 1, subtotal: (x.quantity + 1) * x.price }
-            : x
-        )
-      );
+    const existingItem = cart.find(cartItem => cartItem.menuItemId === item.id);
+    
+    if (existingItem) {
+      setCart(cart.map(cartItem =>
+        cartItem.menuItemId === item.id
+          ? { ...cartItem, quantity: cartItem.quantity + 1, subtotal: (cartItem.quantity + 1) * cartItem.price }
+          : cartItem
+      ));
     } else {
-      setCart([
-        ...cart,
-        {
-          menuItemId: item.id,
-          name: item.name,
-          quantity: 1,
-          price: item.price,
-          subtotal: item.price,
-        },
-      ]);
+      setCart([...cart, {
+        menuItemId: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: 1,
+        subtotal: item.price,
+      }]);
     }
   };
 
-  const updateQty = (id: string, delta: number) => {
-    setCart(
-      cart.map((x) => {
-        if (x.menuItemId === id) {
-          const q = x.quantity + delta;
-          if (q <= 0) return x;
-          return { ...x, quantity: q, subtotal: q * x.price };
-        }
-        return x;
-      })
-    );
+  const updateQuantity = (menuItemId: string, delta: number) => {
+    setCart(cart.map(item => {
+      if (item.menuItemId === menuItemId) {
+        const newQuantity = item.quantity + delta;
+        if (newQuantity <= 0) return item;
+        return {
+          ...item,
+          quantity: newQuantity,
+          subtotal: newQuantity * item.price,
+        };
+      }
+      return item;
+    }));
   };
 
-  const removeItem = (id: string) => {
-    setCart(cart.filter((x) => x.menuItemId !== id));
+  const removeFromCart = (menuItemId: string) => {
+    setCart(cart.filter(item => item.menuItemId !== menuItemId));
   };
 
-  /* TOTALS */
-  const totals = () => {
-    const sub = cart.reduce((s, x) => s + x.subtotal, 0);
-    const cgst = sub * (settings?.cgstRate || 2.5) / 100;
-    const sgst = sub * (settings?.sgstRate || 2.5) / 100;
-    return { subtotal: sub, cgst, sgst, total: sub + cgst + sgst };
+  const calculateTotals = () => {
+    const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
+    const cgst = subtotal * (settings?.cgstRate || 2.5) / 100;
+    const sgst = subtotal * (settings?.sgstRate || 2.5) / 100;
+    const total = subtotal + cgst + sgst;
+    
+    return { subtotal, cgst, sgst, total };
   };
 
-  /* SAVE BILL */
-  const handleSave = async (print = false) => {
-    if (cart.length === 0)
-      return toast({ title: "Empty Cart", description: "Add items first", variant: "destructive" });
+  const handleSaveBill = async (shouldPrint: boolean = false) => {
+    if (cart.length === 0) {
+      toast({
+        title: 'Empty Cart',
+        description: 'Please add items to the cart before saving',
+        variant: 'destructive',
+      });
+      return;
+    }
 
-    if (!settings || !user)
-      return toast({ title: "Error", description: "Missing settings/user", variant: "destructive" });
+    if (!user || !settings) {
+      toast({
+        title: 'Error',
+        description: 'User or settings not found',
+        variant: 'destructive',
+      });
+      return;
+    }
 
-    const t = totals();
+    try {
+      const { subtotal, cgst, sgst, total } = calculateTotals();
 
-    const bill: Bill = {
-      id: `bill-${Date.now()}`,
-      billNumber,
-      createdBy: user.id,
-      createdByName: user.name,
+      const bill: Bill = {
+        id: `bill-${Date.now()}`,
+        billNumber: billNumber,
+        items: cart,
+        subtotal,
+        cgst,
+        sgst,
+        total,
+        createdBy: user.id,
+        createdByName: user.name,
+        createdAt: billDate,
+        billDate,
+        paymentMethod,
+        customerName: customerName || undefined,
+        customerPhone: customerPhone || undefined,
+        syncedToCloud: false,
+      };
 
-      // FIXED: Let browser parse DD/MM/YYYY, HH:MM AM/PM correctly
-      createdAt: new Date(billDate).toISOString(),
+      await createBill(bill);
 
-      billDate,
-      paymentMethod,
-      orderType,
-      customerName: customerName || undefined,
-      customerPhone: customerPhone || undefined,
-      syncedToCloud: false,
-      ...t,
-      items: cart,
-    };
+      setLastBillNumber(billNumber);
 
-    await createBill(bill);
-    setLastBillNumber(billNumber);
+      toast({
+        title: 'Bill Saved',
+        description: `Bill ${billNumber} saved successfully!`,
+      });
 
-    if (print) printBill(bill, settings);
+      if (shouldPrint) printBill(bill, settings);
 
-    toast({ title: "Success", description: "Bill saved" });
+      setCart([]);
+      setCustomerName('');
+      setCustomerPhone('');
+      setPaymentMethod('cash');
+      setBillDate(today);
+      setManualDate(false);
 
-    setCart([]);
-    loadBillNumber();
+      loadBillNumber();
+
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save bill',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const { subtotal, cgst, sgst, total } = totals();
+  const { subtotal, cgst, sgst, total } = calculateTotals();
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-4xl font-bold">Billing</h1>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold">Billing</h1>
+          <p className="text-muted-foreground">Create new bills and manage orders</p>
+        </div>
+      </div>
 
-      {/* DATE + BILL NO BUTTONS */}
-      <div className="flex gap-3 mb-3">
+      <div className="grid lg:grid-cols-3 gap-6">
+        
+        {/* MENU SECTION */}
+        <div className="lg:col-span-2 space-y-4">
 
-        {/* DATE SECTION */}
-        <div className="flex items-center gap-2">
-          <Calendar className="text-muted-foreground" />
-          {manualDate ? (
+          {/* SEARCH + CATEGORY + DATE + BILL NO */}
+          <div className="flex gap-4 items-center">
             <Input
-              type="datetime-local"
-              className="w-56"
-              onChange={(e) =>
-                setBillDate(
-                  new Date(e.target.value).toLocaleString("en-GB", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: true,
-                  })
-                )
-              }
+              placeholder="Search menu items..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1"
             />
-          ) : (
-            <span className="font-semibold">{billDate}</span>
-          )}
 
-          {!manualDate ? (
-            <Button variant="outline" size="sm" onClick={() => setManualDate(true)}>
-              Change Date
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                const d = new Date();
-                const auto = d.toLocaleString("en-GB", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: true,
-                });
-                setBillDate(auto);
-                setManualDate(false);
-              }}
-            >
-              Auto Date
-            </Button>
-          )}
-        </div>
-
-        {/* BILL NUMBER SECTION */}
-        <div className="flex items-center gap-2">
-          <Hash className="text-muted-foreground" />
-          <span className="font-semibold">Bill No: {billNumber}</span>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const newNo = prompt("Enter Bill Number", billNumber);
-              if (newNo) {
-                const formatted = newNo.padStart(2, "0");
-                setBillNumber(formatted);
-                setLastBillNumber(String(Number(formatted) - 1).padStart(2, "0"));
-              }
-            }}
-          >
-            Change
-          </Button>
-        </div>
-
-      </div>
-
-      {/* SEARCH/CATEGORY */}
-      <div className="flex gap-4">
-        <Input
-          placeholder="Search items..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-
-        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {sortedCategories.map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {cat === "all" ? "All Categories" : cat}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* LEFT MENU */}
-        <div className="lg:col-span-2 space-y-6">
-          {grouped.map(({ category, items }) =>
-            items.length === 0 ? null : (
-              <div key={category} className="space-y-3">
-                <h2 className="text-2xl font-bold">{category}</h2>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                  {items.map((item) => (
-                    <Card
-                      key={item.id}
-                      className="cursor-pointer hover:shadow"
-                      onClick={() => addToCart(item)}
-                    >
-                      <CardContent className="p-2">
-                        <p className="font-semibold text-sm">{item.name}</p>
-                        <p className="text-xs text-primary font-bold">₹{item.price}</p>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )
-          )}
-        </div>
-
-        {/* RIGHT: CART */}
-        <Card className="space-y-3 p-4 sticky top-4 h-fit">
-          <CardTitle className="flex items-center gap-2 mb-4">
-            <ShoppingCart className="h-5 w-5" /> Current Order
-          </CardTitle>
-
-          {cart.length === 0 ? (
-            <p className="text-muted-foreground text-center">Cart is empty</p>
-          ) : (
-            <>
-
-              {/* ORDER TYPE BUTTONS */}
-              <div className="flex gap-2 mb-3">
-                <Button
-                  variant={orderType === "dine-in" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setOrderType("dine-in")}
-                >
-                  DINE-IN
-                </Button>
-
-                <Button
-                  variant={orderType === "parcel" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setOrderType("parcel")}
-                >
-                  PARCEL
-                </Button>
-              </div>
-
-              <div className="space-y-2 max-h-72 overflow-y-auto">
-                {cart.map((item) => (
-                  <div
-                    key={item.menuItemId}
-                    className="flex items-center justify-between bg-muted p-2 rounded"
-                  >
-                    <div>
-                      <p className="font-semibold text-sm">{item.name}</p>
-                      <p className="text-xs">
-                        ₹{item.price} × {item.quantity}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <Button size="icon" variant="ghost" onClick={() => updateQty(item.menuItemId, -1)}>
-                        <Minus />
-                      </Button>
-                      <span className="font-bold">{item.quantity}</span>
-                      <Button size="icon" variant="ghost" onClick={() => updateQty(item.menuItemId, 1)}>
-                        <Plus />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="text-destructive" onClick={() => removeItem(item.menuItemId)}>
-                        <Trash2 />
-                      </Button>
-                    </div>
-
-                    <div className="font-bold">₹{item.subtotal.toFixed(0)}</div>
-                  </div>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(cat => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat === 'all' ? 'All Categories' : cat}
+                  </SelectItem>
                 ))}
-              </div>
+              </SelectContent>
+            </Select>
 
-              <div className="space-y-1 border-t pt-3">
-                <div className="flex justify-between"><span>Subtotal</span><span>₹{subtotal.toFixed(0)}</span></div>
-                <div className="flex justify-between"><span>CGST</span><span>₹{cgst.toFixed(0)}</span></div>
-                <div className="flex justify-between"><span>SGST</span><span>₹{sgst.toFixed(0)}</span></div>
-                <div className="flex justify-between text-lg font-bold border-t pt-2">
-                  <span>Total</span><span>₹{total.toFixed(0)}</span>
-                </div>
-              </div>
+            {/* DATE BUTTON */}
+            <div className="flex items-center gap-2">
+              {manualDate ? (
+                <Input
+                  type="date"
+                  value={billDate.split("/").reverse().join("-")}
+                  onChange={(e) =>
+                    setBillDate(
+                      new Date(e.target.value).toLocaleDateString("en-GB")
+                    )
+                  }
+                  className="w-40"
+                />
+              ) : (
+                <span className="text-sm font-semibold">{billDate}</span>
+              )}
 
-              <div>
-                <Label>Customer</Label>
-                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="mb-2" />
-
-                <Label>Phone</Label>
-                <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="mb-2" />
-
-                <Label>Payment</Label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="upi">UPI</SelectItem>
-                    <SelectItem value="card">Card</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                <Button className="flex-1" variant="outline" onClick={() => handleSave(false)}>
-                  <Receipt className="mr-2" /> Save
+              {!manualDate ? (
+                <Button size="sm" variant="outline" onClick={() => setManualDate(true)}>
+                  Change Date
                 </Button>
-                <Button className="flex-1" onClick={() => handleSave(true)}>
-                  <Printer className="mr-2" /> Save & Print
+              ) : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setManualDate(false);
+                    setBillDate(today);
+                  }}
+                >
+                  Auto
                 </Button>
-              </div>
-            </>
-          )}
-        </Card>
+              )}
+            </div>
+
+            {/* BILL NUMBER MANUAL CHANGE */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">Bill No: {billNumber}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const newNo = prompt("Enter Bill Number", billNumber);
+                  if (newNo) {
+                    const formatted = newNo.padStart(2, "0");
+                    setBillNumber(formatted);
+                    setLastBillNumber(String(Number(formatted) - 1).padStart(2, "0"));
+                  }
+                }}
+              >
+                Change
+              </Button>
+            </div>
+          </div>
+
+          {/* MENU CARDS */}
+          <div className="grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+            {filteredItems.map(item => (
+              <Card
+                key={item.id}
+                className="cursor-pointer hover:shadow-md transition-all duration-150"
+                onClick={() => addToCart(item)}
+              >
+                <CardContent className="p-2">
+                  <h3 className="font-semibold text-sm leading-tight">{item.name}</h3>
+                  <p className="text-xs text-primary font-bold mt-1">
+                    {settings?.currency || '₹'}{item.price}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* CART */}
+        <div className="space-y-4">
+          <Card className="sticky top-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
+                Current Order
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              
+              {cart.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Cart is empty. Add items from the menu.
+                </p>
+              ) : (
+                <>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {cart.map(item => (
+                      <div key={item.menuItemId} className="flex items-center gap-2 p-2 rounded bg-muted">
+                        <div className="flex-1">
+                          <p className="font-semibold text-sm">{item.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {settings?.currency || '₹'}{item.price} × {item.quantity}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => updateQuantity(item.menuItemId, -1)}>
+                            <Minus className="h-4 w-4" />
+                          </Button>
+
+                          <span className="w-8 text-center font-semibold">{item.quantity}</span>
+
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => updateQuantity(item.menuItemId, 1)}>
+                            <Plus className="h-4 w-4" />
+                          </Button>
+
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => removeFromCart(item.menuItemId)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        <div className="font-bold">
+                          {settings?.currency || '₹'}{item.subtotal.toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2 border-t pt-4">
+                    <div className="flex justify-between text-sm">
+                      <span>Subtotal</span>
+                      <span className="font-semibold">{settings?.currency || '₹'}{subtotal.toFixed(2)}</span>
+                    </div>
+
+                    <div className="flex justify-between text-sm">
+                      <span>CGST ({settings?.cgstRate || 2.5}%)</span>
+                      <span className="font-semibold">{settings?.currency || '₹'}{cgst.toFixed(2)}</span>
+                    </div>
+
+                    <div className="flex justify-between text-sm">
+                      <span>SGST ({settings?.sgstRate || 2.5}%)</span>
+                      <span className="font-semibold">{settings?.currency || '₹'}{sgst.toFixed(2)}</span>
+                    </div>
+
+                    <div className="flex justify-between text-lg font-bold border-t pt-2">
+                      <span>Total</span>
+                      <span className="text-primary">{settings?.currency || '₹'}{total.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="customer-name">Customer Name (Optional)</Label>
+                      <Input
+                        id="customer-name"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Enter customer name"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="customer-phone">Phone (Optional)</Label>
+                      <Input
+                        id="customer-phone"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        placeholder="Enter phone number"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="payment-method">Payment Method</Label>
+                      <Select value={paymentMethod} onValueChange={(value: any) => setPaymentMethod(value)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="card">Card</SelectItem>
+                          <SelectItem value="upi">UPI</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button className="flex-1" variant="outline" onClick={() => handleSaveBill(false)}>
+                      <Receipt className="mr-2 h-4 w-4" />
+                      Save
+                    </Button>
+
+                    <Button className="flex-1" onClick={() => handleSaveBill(true)}>
+                      <Printer className="mr-2 h-4 w-4" />
+                      Save & Print
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
