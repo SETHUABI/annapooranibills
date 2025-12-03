@@ -1,7 +1,23 @@
 import { Bill, AppSettings } from "@/types";
 
+function parseDate(d: string): Date {
+  // If already ISO format → OK
+  if (d.includes("T")) return new Date(d);
+
+  // If format is DD/MM/YYYY
+  const parts = d.split("/");
+  if (parts.length === 3) {
+    const [dd, mm, yyyy] = parts.map(Number);
+    return new Date(yyyy, mm - 1, dd);
+  }
+
+  return new Date(d);
+}
+
 export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
   const width = settings.printerFormat === "58mm" ? "58mm" : "80mm";
+
+  const billDate = parseDate(bill.createdAt).toLocaleString("en-IN");
 
   return `
 <!DOCTYPE html>
@@ -51,7 +67,7 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
   <!-- BILL INFO -->
   <div>
     <div><strong>Bill No:</strong> ${bill.billNumber}</div>
-    <div><strong>Date:</strong> ${new Date(bill.createdAt).toLocaleString("en-IN")}</div>
+    <div><strong>Date:</strong> ${billDate}</div>
     <div><strong>Cashier:</strong> ${bill.createdByName}</div>
     ${bill.customerName ? `<div><strong>Customer:</strong> ${bill.customerName}</div>` : ""}
   </div>
