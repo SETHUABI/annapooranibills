@@ -178,20 +178,26 @@ export default function Billing() {
     const t = totals();
 
     const bill: Bill = {
-      id: `bill-${Date.now()}`,
-      billNumber,
-      createdBy: user.id,
-      createdByName: user.name,
-      createdAt: billDate,
-      billDate,
-      paymentMethod,
-      orderType,
-      customerName: customerName || undefined,
-      customerPhone: customerPhone || undefined,
-      syncedToCloud: false,
-      ...t,
-      items: cart,
-    };
+  id: `bill-${Date.now()}`,
+  billNumber,
+  createdBy: user.id,
+  createdByName: user.name,
+
+  // FIX DATE STORAGE (convert DD/MM/YYYY → ISO)
+  createdAt: new Date(
+    billDate.includes("/") ? billDate.split("/").reverse().join("-") : billDate
+  ).toISOString(),
+
+  billDate, // keep dd/mm/yyyy for screen
+  paymentMethod,
+  orderType,
+  customerName: customerName || undefined,
+  customerPhone: customerPhone || undefined,
+  syncedToCloud: false,
+  ...t,
+  items: cart,
+};
+
 
     await createBill(bill);
     setLastBillNumber(billNumber);
