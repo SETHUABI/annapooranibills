@@ -1,12 +1,19 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getAllBills, getSettings } from "@/lib/db";
+import { getAllBills, getSettings, createBill } from "@/lib/db";
 import { Bill, AppSettings } from "@/types";
-import { Download, FileDown, Calendar, Printer, Upload } from "lucide-react";
+import {
+  Download,
+  FileDown,
+  Calendar,
+  Printer,
+  Upload,
+} from "lucide-react";
 import { exportBillsToExcel, exportBillsToCSV } from "@/lib/export";
 import { useToast } from "@/hooks/use-toast";
 import { printBill } from "@/lib/print";
+import * as XLSX from "xlsx";
 
 import {
   Table,
@@ -17,8 +24,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-// IMPORT XLSX FOR IMPORT OPTION
-import * as XLSX from "xlsx";
+/* ------------------------------------------------------ */
+/*                    MAIN COMPONENT                      */
+/* ------------------------------------------------------ */
 
 export default function Reports() {
   const [bills, setBills] = useState<Bill[]>([]);
@@ -31,7 +39,9 @@ export default function Reports() {
 
   const { toast } = useToast();
 
-  /* -------------------------------- LOAD DATA ------------------------------- */
+  /* ------------------------------------------------------ */
+  /*                    LOAD DATA                           */
+  /* ------------------------------------------------------ */
 
   useEffect(() => {
     loadData();
@@ -44,53 +54,72 @@ export default function Reports() {
         getSettings(),
       ]);
 
-      // Sort latest first
+      // Sort newest → oldest
       billsData.sort(
         (a, b) =>
-          parseDDMMYYYY(b.createdAt) - parseDDMMYYYY(a.createdAt)
+          parseDate(b.createdAt) - parseDate(a.createdAt)
       );
 
       setBills(billsData);
       setSettings(settingsData || null);
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
-        description: "Failed to load reports data",
+        description: "Unable to load report data",
         variant: "destructive",
       });
     }
   };
 
-  /* ---------------------------- FIX DATE PARSING ---------------------------- */
-  // Convert "dd/mm/yyyy" → Date
-  const parseDDMMYYYY = (d: string): number => {
+  /* ------------------------------------------------------ */
+  /*               FIXED DATE PARSING (DD/MM/YYYY)          */
+  /* ------------------------------------------------------ */
+
+  const parseDate = (d: string): number => {
     if (!d) return 0;
-    const [day, month, year] = d.split("/").map(Number);
-    return new Date(year, month - 1, day).getTime();
+
+    // Case 1: Already ISO string "2025-12-03T11:00"
+    if (d.includes("T")) return new Date(d).getTime();
+
+    // Case 2: "03/12/2025" (dd/mm/yyyy)
+    const parts = d.split("/");
+    if (parts.length === 3) {
+      const [day, month, year] = parts.map(Number);
+      return new Date(year, month - 1, day).getTime();
+    }
+
+    // Fallback
+    return new Date(d).getTime();
   };
 
-  /* ------------------------------ FILTER BILLS ------------------------------ */
+  /* ------------------------------------------------------ */
+  /*                  FILTERING LOGIC                       */
+  /* ------------------------------------------------------ */
 
   const getFilteredBills = () => {
-    const today = new Date();
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const now = new Date();
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    ).getTime();
 
     switch (selectedPeriod) {
       case "today":
-        return bills.filter(
-          (b) => parseDDMMYYYY(b.createdAt) >= todayStart
-        );
+        return bills.filter((b) => parseDate(b.createdAt) >= todayStart);
 
       case "week":
-        const weekAgo = todayStart - 7 * 24 * 60 * 60 * 1000;
         return bills.filter(
-          (b) => parseDDMMYYYY(b.createdAt) >= weekAgo
+          (b) =>
+            parseDate(b.createdAt) >=
+            todayStart - 7 * 24 * 60 * 60 * 1000
         );
 
       case "month":
-        const monthAgo = todayStart - 30 * 24 * 60 * 60 * 1000;
         return bills.filter(
-          (b) => parseDDMMYYYY(b.createdAt) >= monthAgo
+          (b) =>
+            parseDate(b.createdAt) >=
+            todayStart - 30 * 24 * 60 * 60 * 1000
         );
 
       default:
@@ -100,21 +129,25 @@ export default function Reports() {
 
   const filteredBills = getFilteredBills();
 
-  /* ---------------------------- SUMMARY CALCULATE --------------------------- */
+  /* ------------------------------------------------------ */
+  /*                      SUMMARY                           */
+  /* ------------------------------------------------------ */
 
-  const totalSales = filteredBills.reduce((sum, b) => sum + b.total, 0);
-  const totalItems = filteredBills.reduce((sum, b) => sum + b.items.length, 0);
+  const totalSales = filteredBills.reduce((t, b) => t + b.total, 0);
+  const totalItems = filteredBills.reduce((t, b) => t + b.items.length, 0);
   const avgBillValue =
     filteredBills.length > 0 ? totalSales / filteredBills.length : 0;
 
-  /* ------------------------------ EXPORT BUTTONS ---------------------------- */
+  /* ------------------------------------------------------ */
+  /*                       EXPORT                           */
+  /* ------------------------------------------------------ */
 
   const handleExportExcel = () => {
     exportBillsToExcel(
       filteredBills,
       `bills-${selectedPeriod}-${Date.now()}.xlsx`
     );
-    toast({ title: "Exported", description: "Excel file created" });
+    toast({ title: "Done", description: "Excel exported" });
   };
 
   const handleExportCSV = () => {
@@ -122,73 +155,109 @@ export default function Reports() {
       filteredBills,
       `bills-${selectedPeriod}-${Date.now()}.csv`
     );
-    toast({ title: "Exported", description: "CSV file created" });
+    toast({ title: "Done", description: "CSV exported" });
   };
 
-  /* --------------------------- IMPORT DATA (EXCEL) -------------------------- */
+  /* ------------------------------------------------------ */
+  /*                     IMPORT EXCEL                       */
+  /* ------------------------------------------------------ */
 
-  const handleImportExcel = (event: any) => {
+  const handleImportExcel = async (event: any) => {
     try {
       const file = event.target.files[0];
       if (!file) return;
 
       const reader = new FileReader();
 
-      reader.onload = (e: any) => {
+      reader.onload = async (e: any) => {
         const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: "array" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const wb = XLSX.read(data, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
 
-        const json = XLSX.utils.sheet_to_json(sheet);
+        const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+
+        if (rows.length === 0) {
+          return toast({
+            title: "Import Failed",
+            description: "Excel has no rows",
+            variant: "destructive",
+          });
+        }
+
+        let saved = 0;
+
+        for (const row of rows) {
+          try {
+            const bill: Bill = {
+              id: row.id || crypto.randomUUID(),
+              billNumber: row.billNumber || "BILL0000",
+              createdAt: row.createdAt,
+              createdByName: row.createdByName || "",
+              paymentMethod: row.paymentMethod || "",
+              total: Number(row.total) || 0,
+              subtotal: Number(row.subtotal) || 0,
+              cgst: Number(row.cgst) || 0,
+              sgst: Number(row.sgst) || 0,
+              items: JSON.parse(row.items),
+              syncedToCloud: 0,
+            };
+
+            await createBill(bill);
+            saved++;
+          } catch (err) {
+            console.error("Bad row:", err);
+          }
+        }
 
         toast({
-          title: "Imported",
-          description: `Loaded ${json.length} rows (not saved to DB)`,
+          title: "Import Complete",
+          description: `Imported ${saved} bills successfully`,
         });
+
+        loadData();
       };
 
       reader.readAsArrayBuffer(file);
-    } catch (err) {
+    } catch {
       toast({
         title: "Import Failed",
-        description: "Invalid Excel file",
+        description: "Invalid excel file",
         variant: "destructive",
       });
     }
   };
 
-  /* -------------------------- PRINT MULTIPLE BILLS ------------------------- */
+  /* ------------------------------------------------------ */
+  /*             PRINT BILLS FOR DATE RANGE                 */
+  /* ------------------------------------------------------ */
 
   const handlePrintRange = () => {
     if (!fromDate || !toDate) {
       return toast({
-        title: "Select dates",
-        description: "You must select both From & To",
+        title: "Select Dates",
+        description: "Choose both From and To date",
         variant: "destructive",
       });
     }
 
     const start = new Date(fromDate).getTime();
-    const end = new Date(toDate).getTime() + 24 * 60 * 60 * 1000; // include full day
+    const end =
+      new Date(toDate).getTime() + 24 * 60 * 60 * 1000;
 
-    const billsInRange = bills.filter((b) => {
-      const billDate = parseDDMMYYYY(b.createdAt);
-      return billDate >= start && billDate <= end;
+    const list = bills.filter((b) => {
+      const t = parseDate(b.createdAt);
+      return t >= start && t <= end;
     });
 
-    if (billsInRange.length === 0) {
+    if (list.length === 0) {
       return toast({
-        title: "No bills",
-        description: "No bills found in selected date range",
+        title: "No Bills",
+        description: "No bills in selected range",
       });
     }
 
-    printBillsRange(billsInRange, settings!);
-  };
-
-  const printBillsRange = (bills: Bill[], settings: AppSettings) => {
-    const html = bills
-      .map((b) => generateBillHTML(b, settings))
+    const html = list
+      .map((b) => printBillHTML(b, settings!))
       .join('<div style="page-break-after: always;"></div>');
 
     const win = window.open("", "_blank");
@@ -201,61 +270,72 @@ export default function Reports() {
     }, 300);
   };
 
-  const generateBillHTML = (bill: Bill, settings: AppSettings) =>
-    printBill(bill, settings); // uses your existing print format
+  const printBillHTML = (bill: Bill, settings: AppSettings) =>
+    printBill(bill, settings);
 
-  /* ----------------------------- UI TEMPLATE ------------------------------- */
+  /* ------------------------------------------------------ */
+  /*                      UI RENDER                         */
+  /* ------------------------------------------------------ */
 
   return (
     <div className="p-6 space-y-6">
-      {/* HEADER */}
+      {/* HEADER SECTION */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-bold">Reports</h1>
-          <p className="text-muted-foreground">View sales reports & analytics</p>
+          <p className="text-muted-foreground">
+            View sales reports & analytics
+          </p>
         </div>
+
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleExportCSV}>
-            <FileDown className="mr-2 h-4 w-4" /> CSV
+            <FileDown className="mr-2 h-4 w-4" />
+            CSV
           </Button>
 
           <Button onClick={handleExportExcel}>
-            <Download className="mr-2 h-4 w-4" /> Excel
+            <Download className="mr-2 h-4 w-4" />
+            Excel
           </Button>
 
           <Button variant="outline" onClick={loadData}>
             Refresh
           </Button>
 
-          {/* IMPORT EXCEL */}
+          {/* IMPORT */}
           <label className="cursor-pointer">
             <div className="flex items-center px-3 py-2 border rounded">
               <Upload className="h-4 w-4 mr-2" /> Import
             </div>
-            <input type="file" className="hidden" onChange={handleImportExcel} />
+            <input
+              type="file"
+              className="hidden"
+              onChange={handleImportExcel}
+            />
           </label>
         </div>
       </div>
 
-      {/* PERIOD SELECTOR */}
+      {/* PERIOD SELECTION */}
       <div className="flex gap-2">
-        {(["today", "week", "month", "all"] as const).map((period) => (
+        {(["today", "week", "month", "all"] as const).map((p) => (
           <Button
-            key={period}
-            variant={selectedPeriod === period ? "default" : "outline"}
-            onClick={() => setSelectedPeriod(period)}
+            key={p}
+            variant={selectedPeriod === p ? "default" : "outline"}
+            onClick={() => setSelectedPeriod(p)}
           >
             <Calendar className="mr-2 h-4 w-4" />
-            {period.toUpperCase()}
+            {p.toUpperCase()}
           </Button>
         ))}
       </div>
 
-      {/* DATE RANGE PRINT */}
+      {/* PRINT RANGE */}
       <Card className="p-4">
-        <CardTitle className="mb-2 text-lg">Print Bills (Date Range)</CardTitle>
+        <CardTitle className="text-lg">Print Bills (Date Range)</CardTitle>
 
-        <div className="grid md:grid-cols-3 gap-4 mt-3">
+        <div className="grid md:grid-cols-3 gap-4 mt-4">
           <input
             type="date"
             className="border p-2 rounded"
@@ -274,7 +354,7 @@ export default function Reports() {
         </div>
       </Card>
 
-      {/* SUMMARY CARDS */}
+      {/* SUMMARY */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader>
@@ -309,7 +389,9 @@ export default function Reports() {
           <CardHeader>
             <CardTitle>Items Sold</CardTitle>
           </CardHeader>
-          <CardContent className="text-3xl font-bold">{totalItems}</CardContent>
+          <CardContent className="text-3xl font-bold">
+            {totalItems}
+          </CardContent>
         </Card>
       </div>
 
@@ -318,6 +400,7 @@ export default function Reports() {
         <CardHeader>
           <CardTitle>Recent Bills</CardTitle>
         </CardHeader>
+
         <CardContent>
           {filteredBills.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
@@ -346,17 +429,20 @@ export default function Reports() {
                       <TableCell>{bill.createdByName}</TableCell>
                       <TableCell>{bill.items.length}</TableCell>
                       <TableCell>{bill.paymentMethod}</TableCell>
+
                       <TableCell className="text-right font-bold">
                         {settings?.currency}
                         {bill.total.toFixed(2)}
                       </TableCell>
+
                       <TableCell className="text-right">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => printBill(bill, settings!)}
                         >
-                          <Printer className="h-4 w-4 mr-1" /> Print
+                          <Printer className="h-4 w-4 mr-1" />
+                          Print
                         </Button>
                       </TableCell>
                     </TableRow>
