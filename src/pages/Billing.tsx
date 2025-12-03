@@ -36,11 +36,12 @@ export default function Billing() {
   const today = new Date().toLocaleDateString("en-GB");
   const [billDate, setBillDate] = useState(today);
   const [manualDate, setManualDate] = useState(false);
+
   const [billNumber, setBillNumber] = useState("01");
 
-  // NEW: Quick Filters (now includes "favorite")
-  // quickFilter: 'all' | 'egg' | 'chicken' | 'paneer' | 'favorite'
-  const [quickFilter, setQuickFilter] = useState<'all' | 'egg' | 'chicken' | 'paneer' | 'favorite'>('all');
+  // Quick Filters
+  const [quickFilter, setQuickFilter] =
+    useState<'all' | 'egg' | 'chicken' | 'paneer' | 'favorite'>('all');
 
   // Sorting
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | null>(null);
@@ -50,14 +51,12 @@ export default function Billing() {
     loadBillNumber();
   }, []);
 
-  // Load next bill number
   const loadBillNumber = () => {
     const last = getLastBillNumber();
     const next = String(Number(last) + 1).padStart(2, "0");
     setBillNumber(next);
   };
 
-  // Load menu + settings
   const loadData = async () => {
     try {
       const items = await getAllMenuItems();  
@@ -77,7 +76,6 @@ export default function Billing() {
 
   const categories = ['all', ...Array.from(new Set(menuItems.map(item => item.category)))];
 
-  /* ------------------ QUICK FILTER HANDLING ------------------ */
   const applyQuickFilter = (items: MenuItem[]) => {
 
     if (quickFilter === 'favorite') {
@@ -99,7 +97,6 @@ export default function Billing() {
     return items; 
   };
 
-  /* ------------------ CATEGORY + SEARCH ------------------ */
   const applyCategorySearch = (items: MenuItem[]) => {
     return items.filter(item => {
       const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
@@ -108,25 +105,20 @@ export default function Billing() {
     });
   };
 
-  /* ------------------ SORT ------------------ */
   const applySort = (items: MenuItem[]) => {
     if (!sortOrder) return items;
 
     const sorted = [...items].sort((a, b) => a.name.localeCompare(b.name));
-
     if (sortOrder === 'desc') sorted.reverse();
-
     return sorted;
   };
 
-  /* ------------------ FINAL FILTER PIPELINE ------------------ */
   const filteredItems = applySort(
     quickFilter === 'all'
       ? applyCategorySearch(menuItems)
       : applyQuickFilter(menuItems)
   );
 
-  /* ------------------ CART METHODS ------------------ */
   const addToCart = (item: MenuItem) => {
     const existing = cart.find(i => i.menuItemId === item.id);
 
@@ -170,7 +162,6 @@ export default function Billing() {
     return { subtotal, cgst, sgst, total };
   };
 
-  /* ------------------ SAVE BILL ------------------ */
   const handleSaveBill = async (shouldPrint = false) => {
     if (cart.length === 0) {
       toast({ title: 'Cart Empty', description: 'Add items first', variant: 'destructive' });
@@ -211,7 +202,6 @@ export default function Billing() {
 
       if (shouldPrint) printBill(bill, settings);
 
-      // RESET FIELDS
       setCart([]);
       setCustomerName('');
       setCustomerPhone('');
@@ -232,7 +222,6 @@ export default function Billing() {
 
   const { subtotal, cgst, sgst, total } = calculateTotals();
 
-  /* ------------------ VEG/NON-VEG BADGE ------------------ */
   const isNonVegItem = (name: string, vegType?: string) =>
     vegType === 'nonveg' || /chicken|egg/i.test(name);
 
@@ -247,18 +236,19 @@ export default function Billing() {
         {/* MENU SECTION */}
         <div className="lg:col-span-2 space-y-4">
 
-          {/* SEARCH + CATEGORY */}
+          {/* SEARCH + CATEGORY + DATE + BILL NUMBER */}
           <div className="flex gap-4 items-center">
 
+            {/* SMALLER SEARCH BAR */}
             <Input
-              placeholder="Search menu..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1"
+              className="w-40"
             />
 
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-40">
                 <SelectValue placeholder="Select" />
               </SelectTrigger>
               <SelectContent>
@@ -270,9 +260,63 @@ export default function Billing() {
               </SelectContent>
             </Select>
 
+            {/* DATE BUTTONS */}
+            <div className="flex items-center gap-2">
+              {manualDate ? (
+                <Input
+                  type="date"
+                  value={billDate.split("/").reverse().join("-")}
+                  onChange={(e) =>
+                    setBillDate(
+                      new Date(e.target.value).toLocaleDateString("en-GB")
+                    )
+                  }
+                  className="w-36"
+                />
+              ) : (
+                <span className="text-sm font-semibold">{billDate}</span>
+              )}
+
+              {!manualDate ? (
+                <Button size="sm" variant="outline" onClick={() => setManualDate(true)}>
+                  Change Date
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setManualDate(false);
+                    setBillDate(today);
+                  }}
+                >
+                  Auto
+                </Button>
+              )}
+            </div>
+
+            {/* BILL NUMBER */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">Bill No: {billNumber}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const newNo = prompt("Enter Bill Number", billNumber);
+                  if (newNo) {
+                    const formatted = newNo.padStart(2, "0");
+                    setBillNumber(formatted);
+                    setLastBillNumber(String(Number(formatted) - 1).padStart(2, "0"));
+                  }
+                }}
+              >
+                Change
+              </Button>
+            </div>
+
           </div>
 
-          {/* ---------------- QUICK FILTER BUTTONS ---------------- */}
+          {/* QUICK FILTER BUTTONS */}
           <div className="flex items-center gap-2">
 
             <Button
@@ -303,7 +347,6 @@ export default function Billing() {
               Paneer Items
             </Button>
 
-            {/* ⭐ NEW FAVORITE BUTTON */}
             <Button
               variant={quickFilter === 'favorite' ? 'default' : 'outline'}
               onClick={() => { setQuickFilter('favorite'); setSortOrder(null); }}
@@ -313,7 +356,6 @@ export default function Billing() {
               Favorites
             </Button>
 
-            {/* SORT */}
             <div className="ml-4 flex items-center gap-2">
               <Button
                 variant={sortOrder === 'asc' ? 'default' : 'outline'}
@@ -332,7 +374,7 @@ export default function Billing() {
 
           </div>
 
-          {/* ---------------- MENU GRID ---------------- */}
+          {/* MENU GRID */}
           <div className="grid sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {filteredItems.map(item => (
               <Card
@@ -350,7 +392,6 @@ export default function Billing() {
                       )}
                     </h3>
 
-                    {/* Veg/Non-Veg */}
                     <span
                       style={{
                         padding: '2px 6px',
@@ -377,9 +418,10 @@ export default function Billing() {
               </Card>
             ))}
           </div>
+
         </div>
 
-        {/* ---------------- CART ---------------- */}
+        {/* CART */}
         <div className="space-y-4">
           <Card className="sticky top-6">
             <CardHeader>
@@ -434,7 +476,6 @@ export default function Billing() {
                     ))}
                   </div>
 
-                  {/* TOTALS */}
                   <div className="space-y-2 border-t pt-4">
 
                     <div className="flex justify-between text-sm">
@@ -458,7 +499,6 @@ export default function Billing() {
                     </div>
                   </div>
 
-                  {/* CUSTOMER DETAILS */}
                   <div className="space-y-3">
 
                     <div className="space-y-2">
@@ -502,7 +542,6 @@ export default function Billing() {
 
                   </div>
 
-                  {/* SAVE BUTTONS */}
                   <div className="flex gap-2">
                     <Button className="flex-1" variant="outline" onClick={() => handleSaveBill(false)}>
                       <Receipt className="mr-2 h-4 w-4" />
