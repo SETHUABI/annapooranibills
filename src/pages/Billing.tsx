@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
+  CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,17 +24,7 @@ import {
 
 import { getCurrentUser } from "@/lib/auth";
 import { MenuItem, BillItem, Bill, AppSettings } from "@/types";
-import {
-  ShoppingCart,
-  Minus,
-  Plus,
-  Trash2,
-  Printer,
-  Receipt,
-  Calendar,
-  Hash,
-} from "lucide-react";
-
+import { ShoppingCart, Minus, Plus, Trash2, Printer, Receipt, Calendar, Hash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { printBill } from "@/lib/print";
 
@@ -64,15 +55,11 @@ export default function Billing() {
   /* DATE CONTROL */
   const todayFull = new Date();
   const [billDate, setBillDate] = useState(
-    todayFull.toLocaleString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    })
+    todayFull.toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true })
   );
   const [manualDate, setManualDate] = useState(false);
 
-  /* BILL NUMBER */
+  /* BILL NUMBER CONTROL */
   const [billNumber, setBillNumber] = useState("01");
 
   const [customerName, setCustomerName] = useState("");
@@ -86,7 +73,7 @@ export default function Billing() {
   const user = getCurrentUser();
   const { toast } = useToast();
 
-  /* LOAD DATA AND BILL NUMBER */
+  /* LOAD DATA */
   useEffect(() => {
     loadData();
     loadBillNumber();
@@ -108,11 +95,7 @@ export default function Billing() {
       setMenuItems(items.filter((x) => x.isAvailable));
       setSettings(settingsData || null);
     } catch {
-      toast({
-        title: "Error",
-        description: "Failed to load menu",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to load menu", variant: "destructive" });
     }
   };
 
@@ -125,31 +108,23 @@ export default function Billing() {
   ];
 
   const filtered = menuItems.filter((item) => {
-    const c =
-      selectedCategory === "all" || item.category === selectedCategory;
+    const c = selectedCategory === "all" || item.category === selectedCategory;
     const s = item.name.toLowerCase().includes(searchQuery.toLowerCase());
     return c && s;
   });
 
   const grouped = sortedCategories
     .filter((c) => c !== "all")
-    .map((c) => ({
-      category: c,
-      items: filtered.filter((x) => x.category === c),
-    }));
+    .map((c) => ({ category: c, items: filtered.filter((x) => x.category === c) }));
 
-  /* CART OPERATIONS */
+  /* CART LOGIC */
   const addToCart = (item: MenuItem) => {
     const f = cart.find((x) => x.menuItemId === item.id);
     if (f) {
       setCart(
         cart.map((x) =>
           x.menuItemId === item.id
-            ? {
-                ...x,
-                quantity: x.quantity + 1,
-                subtotal: (x.quantity + 1) * x.price,
-              }
+            ? { ...x, quantity: x.quantity + 1, subtotal: (x.quantity + 1) * x.price }
             : x
         )
       );
@@ -187,46 +162,30 @@ export default function Billing() {
   /* TOTALS */
   const totals = () => {
     const sub = cart.reduce((s, x) => s + x.subtotal, 0);
-    const cgst = (sub * (settings?.cgstRate || 2.5)) / 100;
-    const sgst = (sub * (settings?.sgstRate || 2.5)) / 100;
+    const cgst = sub * (settings?.cgstRate || 2.5) / 100;
+    const sgst = sub * (settings?.sgstRate || 2.5) / 100;
     return { subtotal: sub, cgst, sgst, total: sub + cgst + sgst };
   };
 
-  /* SAVE BILL (FIXED DATE STORAGE) */
+  /* SAVE BILL */
   const handleSave = async (print = false) => {
     if (cart.length === 0)
-      return toast({
-        title: "Empty Cart",
-        description: "Add items first",
-        variant: "destructive",
-      });
+      return toast({ title: "Empty Cart", description: "Add items first", variant: "destructive" });
 
     if (!settings || !user)
-      return toast({
-        title: "Error",
-        description: "Missing settings/user",
-        variant: "destructive",
-      });
+      return toast({ title: "Error", description: "Missing settings/user", variant: "destructive" });
 
     const t = totals();
-
-    /* FIXED DATE CONVERSION */
-    const isoDate = (function () {
-      const isDDMM = billDate.includes("/");
-      if (isDDMM) {
-        const [datePart, timePart] = billDate.split(", ");
-        const [dd, mm, yyyy] = datePart.split("/").map(Number);
-        return new Date(`${yyyy}-${mm}-${dd} ${timePart}`).toISOString();
-      }
-      return new Date(billDate).toISOString();
-    })();
 
     const bill: Bill = {
       id: `bill-${Date.now()}`,
       billNumber,
       createdBy: user.id,
       createdByName: user.name,
-      createdAt: isoDate,
+
+      // FIXED: Let browser parse DD/MM/YYYY, HH:MM AM/PM correctly
+      createdAt: new Date(billDate).toISOString(),
+
       billDate,
       paymentMethod,
       orderType,
@@ -254,11 +213,12 @@ export default function Billing() {
     <div className="p-6 space-y-6">
       <h1 className="text-4xl font-bold">Billing</h1>
 
-      {/* DATE & BILL NUMBER */}
+      {/* DATE + BILL NO BUTTONS */}
       <div className="flex gap-3 mb-3">
+
+        {/* DATE SECTION */}
         <div className="flex items-center gap-2">
           <Calendar className="text-muted-foreground" />
-
           {manualDate ? (
             <Input
               type="datetime-local"
@@ -278,11 +238,7 @@ export default function Billing() {
           )}
 
           {!manualDate ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setManualDate(true)}
-            >
+            <Button variant="outline" size="sm" onClick={() => setManualDate(true)}>
               Change Date
             </Button>
           ) : (
@@ -305,6 +261,7 @@ export default function Billing() {
           )}
         </div>
 
+        {/* BILL NUMBER SECTION */}
         <div className="flex items-center gap-2">
           <Hash className="text-muted-foreground" />
           <span className="font-semibold">Bill No: {billNumber}</span>
@@ -317,18 +274,17 @@ export default function Billing() {
               if (newNo) {
                 const formatted = newNo.padStart(2, "0");
                 setBillNumber(formatted);
-                setLastBillNumber(
-                  String(Number(formatted) - 1).padStart(2, "0")
-                );
+                setLastBillNumber(String(Number(formatted) - 1).padStart(2, "0"));
               }
             }}
           >
             Change
           </Button>
         </div>
+
       </div>
 
-      {/* SEARCH */}
+      {/* SEARCH/CATEGORY */}
       <div className="flex gap-4">
         <Input
           placeholder="Search items..."
@@ -336,10 +292,7 @@ export default function Billing() {
           onChange={(e) => setSearchQuery(e.target.value)}
         />
 
-        <Select
-          value={selectedCategory}
-          onValueChange={setSelectedCategory}
-        >
+        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
           <SelectTrigger className="w-48">
             <SelectValue />
           </SelectTrigger>
@@ -353,8 +306,8 @@ export default function Billing() {
         </Select>
       </div>
 
-      {/* MAIN GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
         {/* LEFT MENU */}
         <div className="lg:col-span-2 space-y-6">
           {grouped.map(({ category, items }) =>
@@ -370,12 +323,8 @@ export default function Billing() {
                       onClick={() => addToCart(item)}
                     >
                       <CardContent className="p-2">
-                        <p className="font-semibold text-sm">
-                          {item.name}
-                        </p>
-                        <p className="text-xs text-primary font-bold">
-                          ₹{item.price}
-                        </p>
+                        <p className="font-semibold text-sm">{item.name}</p>
+                        <p className="text-xs text-primary font-bold">₹{item.price}</p>
                       </CardContent>
                     </Card>
                   ))}
@@ -385,24 +334,21 @@ export default function Billing() {
           )}
         </div>
 
-        {/* RIGHT CART */}
+        {/* RIGHT: CART */}
         <Card className="space-y-3 p-4 sticky top-4 h-fit">
           <CardTitle className="flex items-center gap-2 mb-4">
             <ShoppingCart className="h-5 w-5" /> Current Order
           </CardTitle>
 
           {cart.length === 0 ? (
-            <p className="text-muted-foreground text-center">
-              Cart is empty
-            </p>
+            <p className="text-muted-foreground text-center">Cart is empty</p>
           ) : (
             <>
-              {/* ORDER TYPE */}
+
+              {/* ORDER TYPE BUTTONS */}
               <div className="flex gap-2 mb-3">
                 <Button
-                  variant={
-                    orderType === "dine-in" ? "default" : "outline"
-                  }
+                  variant={orderType === "dine-in" ? "default" : "outline"}
                   className="flex-1"
                   onClick={() => setOrderType("dine-in")}
                 >
@@ -410,9 +356,7 @@ export default function Billing() {
                 </Button>
 
                 <Button
-                  variant={
-                    orderType === "parcel" ? "default" : "outline"
-                  }
+                  variant={orderType === "parcel" ? "default" : "outline"}
                   className="flex-1"
                   onClick={() => setOrderType("parcel")}
                 >
@@ -420,7 +364,6 @@ export default function Billing() {
                 </Button>
               </div>
 
-              {/* CART ITEMS */}
               <div className="space-y-2 max-h-72 overflow-y-auto">
                 {cart.map((item) => (
                   <div
@@ -428,97 +371,49 @@ export default function Billing() {
                     className="flex items-center justify-between bg-muted p-2 rounded"
                   >
                     <div>
-                      <p className="font-semibold text-sm">
-                        {item.name}
-                      </p>
+                      <p className="font-semibold text-sm">{item.name}</p>
                       <p className="text-xs">
                         ₹{item.price} × {item.quantity}
                       </p>
                     </div>
 
                     <div className="flex items-center gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => updateQty(item.menuItemId, -1)}
-                      >
+                      <Button size="icon" variant="ghost" onClick={() => updateQty(item.menuItemId, -1)}>
                         <Minus />
                       </Button>
-                      <span className="font-bold">
-                        {item.quantity}
-                      </span>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => updateQty(item.menuItemId, 1)}
-                      >
+                      <span className="font-bold">{item.quantity}</span>
+                      <Button size="icon" variant="ghost" onClick={() => updateQty(item.menuItemId, 1)}>
                         <Plus />
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="text-destructive"
-                        onClick={() => removeItem(item.menuItemId)}
-                      >
+                      <Button size="icon" variant="ghost" className="text-destructive" onClick={() => removeItem(item.menuItemId)}>
                         <Trash2 />
                       </Button>
                     </div>
 
-                    <div className="font-bold">
-                      ₹{item.subtotal.toFixed(0)}
-                    </div>
+                    <div className="font-bold">₹{item.subtotal.toFixed(0)}</div>
                   </div>
                 ))}
               </div>
 
-              {/* TOTALS */}
               <div className="space-y-1 border-t pt-3">
-                <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <span>₹{subtotal.toFixed(0)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>CGST</span>
-                  <span>₹{cgst.toFixed(0)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>SGST</span>
-                  <span>₹{sgst.toFixed(0)}</span>
-                </div>
+                <div className="flex justify-between"><span>Subtotal</span><span>₹{subtotal.toFixed(0)}</span></div>
+                <div className="flex justify-between"><span>CGST</span><span>₹{cgst.toFixed(0)}</span></div>
+                <div className="flex justify-between"><span>SGST</span><span>₹{sgst.toFixed(0)}</span></div>
                 <div className="flex justify-between text-lg font-bold border-t pt-2">
-                  <span>Total</span>
-                  <span>₹{total.toFixed(0)}</span>
+                  <span>Total</span><span>₹{total.toFixed(0)}</span>
                 </div>
               </div>
 
-              {/* CUSTOMER */}
               <div>
                 <Label>Customer</Label>
-                <Input
-                  value={customerName}
-                  onChange={(e) =>
-                    setCustomerName(e.target.value)
-                  }
-                  className="mb-2"
-                />
+                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="mb-2" />
 
                 <Label>Phone</Label>
-                <Input
-                  value={customerPhone}
-                  onChange={(e) =>
-                    setCustomerPhone(e.target.value)
-                  }
-                  className="mb-2"
-                />
+                <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="mb-2" />
 
                 <Label>Payment</Label>
-                <Select
-                  value={paymentMethod}
-                  onValueChange={setPaymentMethod}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="upi">UPI</SelectItem>
@@ -527,19 +422,11 @@ export default function Billing() {
                 </Select>
               </div>
 
-              {/* SAVE BUTTONS */}
               <div className="flex gap-2 mt-4">
-                <Button
-                  className="flex-1"
-                  variant="outline"
-                  onClick={() => handleSave(false)}
-                >
+                <Button className="flex-1" variant="outline" onClick={() => handleSave(false)}>
                   <Receipt className="mr-2" /> Save
                 </Button>
-                <Button
-                  className="flex-1"
-                  onClick={() => handleSave(true)}
-                >
+                <Button className="flex-1" onClick={() => handleSave(true)}>
                   <Printer className="mr-2" /> Save & Print
                 </Button>
               </div>
