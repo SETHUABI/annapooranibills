@@ -9,6 +9,7 @@ import {
   Calendar,
   Printer,
   Upload,
+  Pencil,
 } from "lucide-react";
 import { exportBillsToExcel, exportBillsToCSV } from "@/lib/export";
 import { useToast } from "@/hooks/use-toast";
@@ -63,7 +64,6 @@ export default function Reports() {
   /* ------------------------------ DATE PARSE ------------------------------ */
   const parseDate = (d: string): number => {
     if (!d) return 0;
-
     if (d.includes("T")) return new Date(d).getTime();
 
     const parts = d.split("/");
@@ -71,7 +71,6 @@ export default function Reports() {
       const [day, month, year] = parts.map(Number);
       return new Date(year, month - 1, day).getTime();
     }
-
     return new Date(d).getTime();
   };
 
@@ -91,15 +90,13 @@ export default function Reports() {
       case "week":
         return bills.filter(
           (b) =>
-            parseDate(b.createdAt) >=
-            todayStart - 7 * 24 * 60 * 60 * 1000
+            parseDate(b.createdAt) >= todayStart - 7 * 24 * 60 * 60 * 1000
         );
 
       case "month":
         return bills.filter(
           (b) =>
-            parseDate(b.createdAt) >=
-            todayStart - 30 * 24 * 60 * 60 * 1000
+            parseDate(b.createdAt) >= todayStart - 30 * 24 * 60 * 60 * 1000
         );
 
       default:
@@ -144,7 +141,6 @@ export default function Reports() {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
-
         const rows: any[] = XLSX.utils.sheet_to_json(sheet);
 
         if (rows.length === 0) {
@@ -172,12 +168,9 @@ export default function Reports() {
               items: JSON.parse(row.items),
               syncedToCloud: 0,
             };
-
             await createBill(bill);
             saved++;
-          } catch {
-            console.error("Bad row");
-          }
+          } catch {}
         }
 
         toast({
@@ -258,9 +251,7 @@ export default function Reports() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-bold">Reports</h1>
-          <p className="text-muted-foreground">
-            View sales reports & analytics
-          </p>
+          <p className="text-muted-foreground">View sales reports & analytics</p>
         </div>
 
         <div className="flex gap-2">
@@ -282,11 +273,7 @@ export default function Reports() {
             <div className="flex items-center px-3 py-2 border rounded">
               <Upload className="h-4 w-4 mr-2" /> Import
             </div>
-            <input
-              type="file"
-              className="hidden"
-              onChange={handleImportExcel}
-            />
+            <input type="file" className="hidden" onChange={handleImportExcel} />
           </label>
         </div>
       </div>
@@ -409,7 +396,9 @@ export default function Reports() {
                         {bill.total.toFixed(2)}
                       </TableCell>
 
-                      <TableCell className="text-right">
+                      <TableCell className="text-right flex gap-2 justify-end">
+
+                        {/* PRINT BUTTON */}
                         <Button
                           variant="outline"
                           size="sm"
@@ -428,10 +417,26 @@ export default function Reports() {
                           <Printer className="h-4 w-4 mr-1" />
                           Print
                         </Button>
+
+                        {/* ⭐ NEW — EDIT BILL BUTTON */}
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="bg-blue-600 text-white"
+                          onClick={() => {
+                            localStorage.setItem("editBill", JSON.stringify(bill));
+                            window.location.href = "/billing";
+                          }}
+                        >
+                          <Pencil className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
+
               </Table>
             </div>
           )}
