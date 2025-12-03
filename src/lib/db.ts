@@ -295,6 +295,12 @@ export async function updateBill(bill: Bill): Promise<void> {
   await db.put("bills", bill);
 }
 
+/* ---------------------- ADDED DELETE BILL FUNCTION ------------------------ */
+export async function deleteBill(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete("bills", id);
+}
+
 export async function getLastBillNumber(): Promise<string> {
   const db = await getDB();
   const bills = await db.getAll("bills");
@@ -360,5 +366,6 @@ export async function initializeDefaultData(): Promise<void> {
 
   await db.add("settings", settings);
 
-  // EMPTY MENU — you will run resetMenuItems() manually
+  // EMPTY MENU
+  // You will run resetMenuItems() manually
 }
