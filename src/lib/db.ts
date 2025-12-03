@@ -1,295 +1,458 @@
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { User, MenuItem, Bill, AppSettings } from '@/types';
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { getAllBills, getSettings, createBill } from "@/lib/db";
+import { Bill, AppSettings } from "@/types";
+import {
+  Download,
+  FileDown,
+  Calendar,
+  Printer,
+  Upload,
+} from "lucide-react";
+import { exportBillsToExcel, exportBillsToCSV } from "@/lib/export";
+import { useToast } from "@/hooks/use-toast";
+import { printBill } from "@/lib/print";
+import * as XLSX from "xlsx";
 
-interface RestaurantPOSDB extends DBSchema {
-  users: {
-    key: string;
-    value: User;
-    indexes: { 'by-username': string };
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+/* ------------------------------------------------------ */
+/*                    MAIN COMPONENT                      */
+/* ------------------------------------------------------ */
+
+export default function Reports() {
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [selectedPeriod, setSelectedPeriod] =
+    useState<"today" | "week" | "month" | "all">("today");
+
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
+  const { toast } = useToast();
+
+  /* ------------------------------------------------------ */
+  /*                    LOAD DATA                           */
+  /* ------------------------------------------------------ */
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [billsData, settingsData] = await Promise.all([
+        getAllBills(),
+        getSettings(),
+      ]);
+
+      // Sort newest → oldest
+      billsData.sort(
+        (a, b) =>
+          parseDate(b.createdAt) - parseDate(a.createdAt)
+      );
+
+      setBills(billsData);
+      setSettings(settingsData || null);
+    } catch {
+      toast({
+        title: "Error",
+        description: "Unable to load report data",
+        variant: "destructive",
+      });
+    }
   };
-  menuItems: {
-    key: string;
-    value: MenuItem;
-    indexes: { 'by-category': string; 'by-available': number };
+
+  /* ------------------------------------------------------ */
+  /*               FIXED DATE PARSING (DD/MM/YYYY)          */
+  /* ------------------------------------------------------ */
+
+  const parseDate = (d: string): number => {
+    if (!d) return 0;
+
+    // Case 1: Already ISO string "2025-12-03T11:00"
+    if (d.includes("T")) return new Date(d).getTime();
+
+    // Case 2: "03/12/2025" (dd/mm/yyyy)
+    const parts = d.split("/");
+    if (parts.length === 3) {
+      const [day, month, year] = parts.map(Number);
+      return new Date(year, month - 1, day).getTime();
+    }
+
+    // Fallback
+    return new Date(d).getTime();
   };
-  bills: {
-    key: string;
-    value: Bill;
-    indexes: { 'by-date': string; 'by-user': string; 'by-sync': number };
+
+  /* ------------------------------------------------------ */
+  /*                  FILTERING LOGIC                       */
+  /* ------------------------------------------------------ */
+
+  const getFilteredBills = () => {
+    const now = new Date();
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    ).getTime();
+
+    switch (selectedPeriod) {
+      case "today":
+        return bills.filter((b) => parseDate(b.createdAt) >= todayStart);
+
+      case "week":
+        return bills.filter(
+          (b) =>
+            parseDate(b.createdAt) >=
+            todayStart - 7 * 24 * 60 * 60 * 1000
+        );
+
+      case "month":
+        return bills.filter(
+          (b) =>
+            parseDate(b.createdAt) >=
+            todayStart - 30 * 24 * 60 * 60 * 1000
+        );
+
+      default:
+        return bills;
+    }
   };
-  settings: {
-    key: string;
-    value: AppSettings;
+
+  const filteredBills = getFilteredBills();
+
+  /* ------------------------------------------------------ */
+  /*                      SUMMARY                           */
+  /* ------------------------------------------------------ */
+
+  const totalSales = filteredBills.reduce((t, b) => t + b.total, 0);
+  const totalItems = filteredBills.reduce((t, b) => t + b.items.length, 0);
+  const avgBillValue =
+    filteredBills.length > 0 ? totalSales / filteredBills.length : 0;
+
+  /* ------------------------------------------------------ */
+  /*                       EXPORT                           */
+  /* ------------------------------------------------------ */
+
+  const handleExportExcel = () => {
+    exportBillsToExcel(
+      filteredBills,
+      `bills-${selectedPeriod}-${Date.now()}.xlsx`
+    );
+    toast({ title: "Done", description: "Excel exported" });
   };
-}
 
-const DB_NAME = 'RestaurantPOS';
-const DB_VERSION = 1;
+  const handleExportCSV = () => {
+    exportBillsToCSV(
+      filteredBills,
+      `bills-${selectedPeriod}-${Date.now()}.csv`
+    );
+    toast({ title: "Done", description: "CSV exported" });
+  };
 
-let dbInstance: IDBPDatabase<RestaurantPOSDB> | null = null;
+  /* ------------------------------------------------------ */
+  /*                     IMPORT EXCEL                       */
+  /* ------------------------------------------------------ */
 
-export async function getDB(): Promise<IDBPDatabase<RestaurantPOSDB>> {
-  if (dbInstance) return dbInstance;
+  const handleImportExcel = async (event: any) => {
+    try {
+      const file = event.target.files[0];
+      if (!file) return;
 
-  dbInstance = await openDB<RestaurantPOSDB>(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion, newVersion, transaction) {
-      // Users store
-      if (!db.objectStoreNames.contains('users')) {
-        const userStore = db.createObjectStore('users', { keyPath: 'id' });
-        userStore.createIndex('by-username', 'username', { unique: true });
-      }
+      const reader = new FileReader();
 
-      // Menu items store
-      if (!db.objectStoreNames.contains('menuItems')) {
-        const menuStore = db.createObjectStore('menuItems', { keyPath: 'id' });
-        menuStore.createIndex('by-category', 'category');
-        menuStore.createIndex('by-available', 'isAvailable');
-      }
+      reader.onload = async (e: any) => {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
 
-      // Bills store
-      if (!db.objectStoreNames.contains('bills')) {
-        const billStore = db.createObjectStore('bills', { keyPath: 'id' });
-        billStore.createIndex('by-date', 'createdAt');
-        billStore.createIndex('by-user', 'createdBy');
-        billStore.createIndex('by-sync', 'syncedToCloud');
-      }
+        const rows: any[] = XLSX.utils.sheet_to_json(sheet);
 
-      // Settings store
-      if (!db.objectStoreNames.contains('settings')) {
-        db.createObjectStore('settings', { keyPath: 'id' });
-      }
-    },
-  });
+        if (rows.length === 0) {
+          return toast({
+            title: "Import Failed",
+            description: "Excel has no rows",
+            variant: "destructive",
+          });
+        }
 
-  return dbInstance;
-}
+        let saved = 0;
 
-// User operations
-export async function createUser(user: User): Promise<void> {
-  const db = await getDB();
-  await db.add('users', user);
-}
+        for (const row of rows) {
+          try {
+            const bill: Bill = {
+              id: row.id || crypto.randomUUID(),
+              billNumber: row.billNumber || "BILL0000",
+              createdAt: row.createdAt,
+              createdByName: row.createdByName || "",
+              paymentMethod: row.paymentMethod || "",
+              total: Number(row.total) || 0,
+              subtotal: Number(row.subtotal) || 0,
+              cgst: Number(row.cgst) || 0,
+              sgst: Number(row.sgst) || 0,
+              items: JSON.parse(row.items),
+              syncedToCloud: 0,
+            };
 
-export async function getUser(id: string): Promise<User | undefined> {
-  const db = await getDB();
-  return await db.get('users', id);
-}
+            await createBill(bill);
+            saved++;
+          } catch (err) {
+            console.error("Bad row:", err);
+          }
+        }
 
-export async function getUserByUsername(username: string): Promise<User | undefined> {
-  const db = await getDB();
-  return await db.getFromIndex('users', 'by-username', username);
-}
+        toast({
+          title: "Import Complete",
+          description: `Imported ${saved} bills successfully`,
+        });
 
-export async function getAllUsers(): Promise<User[]> {
-  const db = await getDB();
-  return await db.getAll('users');
-}
+        loadData();
+      };
 
-export async function updateUser(user: User): Promise<void> {
-  const db = await getDB();
-  await db.put('users', user);
-}
+      reader.readAsArrayBuffer(file);
+    } catch {
+      toast({
+        title: "Import Failed",
+        description: "Invalid excel file",
+        variant: "destructive",
+      });
+    }
+  };
 
-export async function deleteUser(id: string): Promise<void> {
-  const db = await getDB();
-  await db.delete('users', id);
-}
+  /* ------------------------------------------------------ */
+  /*             PRINT BILLS FOR DATE RANGE                 */
+  /* ------------------------------------------------------ */
 
-// Menu item operations
-export async function createMenuItem(item: MenuItem): Promise<void> {
-  const db = await getDB();
-  await db.add('menuItems', item);
-}
+  const handlePrintRange = () => {
+    if (!fromDate || !toDate) {
+      return toast({
+        title: "Select Dates",
+        description: "Choose both From and To date",
+        variant: "destructive",
+      });
+    }
 
-export async function getMenuItem(id: string): Promise<MenuItem | undefined> {
-  const db = await getDB();
-  return await db.get('menuItems', id);
-}
+    const start = new Date(fromDate).getTime();
+    const end =
+      new Date(toDate).getTime() + 24 * 60 * 60 * 1000;
 
-export async function getAllMenuItems(): Promise<MenuItem[]> {
-  const db = await getDB();
-  return await db.getAll('menuItems');
-}
+    const list = bills.filter((b) => {
+      const t = parseDate(b.createdAt);
+      return t >= start && t <= end;
+    });
 
-export async function getMenuItemsByCategory(category: string): Promise<MenuItem[]> {
-  const db = await getDB();
-  return await db.getAllFromIndex('menuItems', 'by-category', category);
-}
+    if (list.length === 0) {
+      return toast({
+        title: "No Bills",
+        description: "No bills in selected range",
+      });
+    }
 
-export async function getAvailableMenuItems(): Promise<MenuItem[]> {
-  const db = await getDB();
-  const allItems = await db.getAll('menuItems');
-  return allItems.filter(item => item.isAvailable);
-}
+    const html = list
+      .map((b) => printBillHTML(b, settings!))
+      .join('<div style="page-break-after: always;"></div>');
 
-export async function updateMenuItem(item: MenuItem): Promise<void> {
-  const db = await getDB();
-  await db.put('menuItems', item);
-}
+    const win = window.open("", "_blank");
+    win.document.write(html);
+    win.document.close();
 
-export async function deleteMenuItem(id: string): Promise<void> {
-  const db = await getDB();
-  await db.delete('menuItems', id);
-}
+    setTimeout(() => {
+      win.print();
+      win.close();
+    }, 300);
+  };
 
-// Bill operations
-export async function createBill(bill: Bill): Promise<void> {
-  const db = await getDB();
-  await db.add('bills', bill);
-}
+  const printBillHTML = (bill: Bill, settings: AppSettings) =>
+    printBill(bill, settings);
 
-export async function getBill(id: string): Promise<Bill | undefined> {
-  const db = await getDB();
-  return await db.get('bills', id);
-}
+  /* ------------------------------------------------------ */
+  /*                      UI RENDER                         */
+  /* ------------------------------------------------------ */
 
-export async function getAllBills(): Promise<Bill[]> {
-  const db = await getDB();
-  return await db.getAll('bills');
-}
+  return (
+    <div className="p-6 space-y-6">
+      {/* HEADER SECTION */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold">Reports</h1>
+          <p className="text-muted-foreground">
+            View sales reports & analytics
+          </p>
+        </div>
 
-export async function getBillsByDateRange(startDate: string, endDate: string): Promise<Bill[]> {
-  const db = await getDB();
-  const allBills = await db.getAll('bills');
-  return allBills.filter(bill => 
-    bill.createdAt >= startDate && bill.createdAt <= endDate
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportCSV}>
+            <FileDown className="mr-2 h-4 w-4" />
+            CSV
+          </Button>
+
+          <Button onClick={handleExportExcel}>
+            <Download className="mr-2 h-4 w-4" />
+            Excel
+          </Button>
+
+          <Button variant="outline" onClick={loadData}>
+            Refresh
+          </Button>
+
+          {/* IMPORT */}
+          <label className="cursor-pointer">
+            <div className="flex items-center px-3 py-2 border rounded">
+              <Upload className="h-4 w-4 mr-2" /> Import
+            </div>
+            <input
+              type="file"
+              className="hidden"
+              onChange={handleImportExcel}
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* PERIOD SELECTION */}
+      <div className="flex gap-2">
+        {(["today", "week", "month", "all"] as const).map((p) => (
+          <Button
+            key={p}
+            variant={selectedPeriod === p ? "default" : "outline"}
+            onClick={() => setSelectedPeriod(p)}
+          >
+            <Calendar className="mr-2 h-4 w-4" />
+            {p.toUpperCase()}
+          </Button>
+        ))}
+      </div>
+
+      {/* PRINT RANGE */}
+      <Card className="p-4">
+        <CardTitle className="text-lg">Print Bills (Date Range)</CardTitle>
+
+        <div className="grid md:grid-cols-3 gap-4 mt-4">
+          <input
+            type="date"
+            className="border p-2 rounded"
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+
+          <input
+            type="date"
+            className="border p-2 rounded"
+            onChange={(e) => setToDate(e.target.value)}
+          />
+
+          <Button onClick={handlePrintRange}>
+            <Printer className="mr-2 h-4 w-4" /> Print All
+          </Button>
+        </div>
+      </Card>
+
+      {/* SUMMARY */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Sales</CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-bold text-primary">
+            {settings?.currency || "₹"}
+            {totalSales.toFixed(2)}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Average Bill</CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-bold">
+            {settings?.currency || "₹"}
+            {avgBillValue.toFixed(2)}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Bills</CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-bold">
+            {filteredBills.length}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Items Sold</CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-bold">
+            {totalItems}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* TABLE */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Bills</CardTitle>
+        </CardHeader>
+
+        <CardContent>
+          {filteredBills.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">
+              No bills for this period
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Bill No</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Cashier</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+
+                <TableBody>
+                  {filteredBills.slice(0, 50).map((bill) => (
+                    <TableRow key={bill.id}>
+                      <TableCell>{bill.billNumber}</TableCell>
+                      <TableCell>{bill.createdAt}</TableCell>
+                      <TableCell>{bill.createdByName}</TableCell>
+                      <TableCell>{bill.items.length}</TableCell>
+                      <TableCell>{bill.paymentMethod}</TableCell>
+
+                      <TableCell className="text-right font-bold">
+                        {settings?.currency}
+                        {bill.total.toFixed(2)}
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => printBill(bill, settings!)}
+                        >
+                          <Printer className="h-4 w-4 mr-1" />
+                          Print
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
-}
-
-export async function getUnsyncedBills(): Promise<Bill[]> {
-  const db = await getDB();
-  return await db.getAllFromIndex('bills', 'by-sync', 0);
-}
-
-export async function updateBill(bill: Bill): Promise<void> {
-  const db = await getDB();
-  await db.put('bills', bill);
-}
-
-export async function getLastBillNumber(): Promise<string> {
-  const db = await getDB();
-  const bills = await db.getAll('bills');
-  if (bills.length === 0) return 'BILL0000';
-  
-  const lastBill = bills[bills.length - 1];
-  const lastNumber = parseInt(lastBill.billNumber.replace('BILL', ''));
-  return `BILL${String(lastNumber + 1).padStart(4, '0')}`;
-}
-
-// Settings operations
-export async function getSettings(): Promise<AppSettings | undefined> {
-  const db = await getDB();
-  const settings = await db.getAll('settings');
-  return settings[0];
-}
-
-export async function saveSettings(settings: AppSettings & { id: string }): Promise<void> {
-  const db = await getDB();
-  await db.put('settings', settings);
-}
-
-// Initialize default data
-export async function initializeDefaultData(): Promise<void> {
-  const db = await getDB();
-  
-  // Check if already initialized
-  const users = await db.getAll('users');
-  if (users.length > 0) return;
-
-  // Create default admin user (password: admin123)
-  const bcrypt = await import('bcryptjs');
-  const defaultAdmin: User = {
-    id: 'user-1',
-    username: 'admin',
-    passwordHash: await bcrypt.hash('admin123', 10),
-    role: 'admin',
-    name: 'Admin User',
-    createdAt: new Date().toISOString(),
-    isActive: true,
-  };
-  await db.add('users', defaultAdmin);
-
-  // Create default settings
-  const defaultSettings: AppSettings & { id: string } = {
-    id: 'settings-1',
-    shopName: 'My Restaurant',
-    shopAddress: '123 Main Street, City',
-    shopGST: 'GSTIN123456789',
-    cgstRate: 2.5,
-    sgstRate: 2.5,
-    printerFormat: '80mm',
-    theme: 'dark',
-    autoSync: false,
-    currency: '₹',
-  };
-  await db.add('settings', defaultSettings);
-
-  // Create sample menu items
-  const categories = ['Starters', 'Main Course', 'Beverages', 'Desserts'];
-  const sampleItems: MenuItem[] = [
-    {
-      id: 'menu-1',
-      name: 'Veg Manchurian',
-      price: 150,
-      category: 'Starters',
-      description: 'Crispy fried vegetables in tangy sauce',
-      isAvailable: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'menu-2',
-      name: 'Paneer Tikka',
-      price: 200,
-      category: 'Starters',
-      description: 'Grilled cottage cheese with spices',
-      isAvailable: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'menu-3',
-      name: 'Butter Chicken',
-      price: 280,
-      category: 'Main Course',
-      description: 'Creamy tomato curry with chicken',
-      isAvailable: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'menu-4',
-      name: 'Dal Makhani',
-      price: 180,
-      category: 'Main Course',
-      description: 'Creamy black lentils',
-      isAvailable: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'menu-5',
-      name: 'Fresh Lime Soda',
-      price: 60,
-      category: 'Beverages',
-      description: 'Refreshing lime drink',
-      isAvailable: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'menu-6',
-      name: 'Gulab Jamun',
-      price: 80,
-      category: 'Desserts',
-      description: 'Sweet milk dumplings in syrup',
-      isAvailable: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ];
-
-  for (const item of sampleItems) {
-    await db.add('menuItems', item);
-  }
 }
