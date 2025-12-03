@@ -1,22 +1,33 @@
 import { Bill, AppSettings } from "@/types";
 
+/* FIXED DATE PARSER */
 function parseDate(d: string): Date {
-  // If already ISO format → OK
+  if (!d) return new Date();
+
+  // ISO → ok
   if (d.includes("T")) return new Date(d);
 
-  // If format is DD/MM/YYYY
-  const parts = d.split("/");
-  if (parts.length === 3) {
-    const [dd, mm, yyyy] = parts.map(Number);
+  // DD/MM/YYYY HH:MM AM/PM or DD/MM/YYYY only
+  if (d.includes("/")) {
+    let [datePart, timePart] = d.split(" ");
+    const [dd, mm, yyyy] = datePart.split("/").map(Number);
+
+    if (timePart) {
+      // Example: "10:54 AM"
+      return new Date(`${yyyy}-${mm}-${dd} ${timePart}`);
+    }
+
     return new Date(yyyy, mm - 1, dd);
   }
 
+  // Fallback
   return new Date(d);
 }
 
 export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
   const width = settings.printerFormat === "58mm" ? "58mm" : "80mm";
 
+  /* ALWAYS VALID DATE */
   const billDate = parseDate(bill.createdAt).toLocaleString("en-IN");
 
   return `
@@ -37,18 +48,22 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
       width: ${width};
     }
 
-    .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; }
-    .shop-name { font-size: 20px; font-weight: 900; }
-
-    .item-row { display: flex; justify-content: space-between; margin: 6px 0; }
+    .header { text-align:center; border-bottom:2px dashed #000; padding-bottom:10px; }
+    .shop-name { font-size:20px; font-weight:900; }
 
     .order-type {
-      font-size: 18px;
-      font-weight: 900;
-      text-align: center;
-      margin: 10px 0;
-      padding: 5px 0;
-      border: 2px solid #000;
+      font-size:18px;
+      font-weight:900;
+      text-align:center;
+      margin:10px 0;
+      padding:5px 0;
+      border:2px solid #000;
+    }
+
+    .item-row { 
+      display:flex; 
+      justify-content:space-between; 
+      margin:6px 0; 
     }
   </style>
 </head>
@@ -61,10 +76,8 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
     ${settings.shopGST ? `<div>GSTIN: ${settings.shopGST}</div>` : ""}
   </div>
 
-  <!-- ORDER TYPE -->
   <div class="order-type">${bill.orderType === "parcel" ? "PARCEL" : "DINE-IN"}</div>
 
-  <!-- BILL INFO -->
   <div>
     <div><strong>Bill No:</strong> ${bill.billNumber}</div>
     <div><strong>Date:</strong> ${billDate}</div>
@@ -72,7 +85,6 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
     ${bill.customerName ? `<div><strong>Customer:</strong> ${bill.customerName}</div>` : ""}
   </div>
 
-  <!-- ITEM LIST -->
   <div style="border-top:1px dashed #000; border-bottom:1px dashed #000; margin:10px 0; padding:10px 0;">
     <div style="display:flex; justify-content:space-between; border-bottom:1px solid #000; padding-bottom:5px;">
       <div style="flex:2;">Item</div>
@@ -95,7 +107,6 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
       .join("")}
   </div>
 
-  <!-- TOTALS -->
   <div>
     <div class="item-row"><span>Subtotal:</span><span>${settings.currency}${bill.subtotal.toFixed(2)}</span></div>
     <div class="item-row"><span>CGST:</span><span>${settings.currency}${bill.cgst.toFixed(2)}</span></div>
@@ -112,17 +123,24 @@ export function generatePrintHTML(bill: Bill, settings: AppSettings): string {
   </div>
 
 </body>
-</html>
-`;
+</html>`;
 }
 
 export function printBill(bill: Bill, settings: AppSettings): void {
-  const w = window.open("", "_blank");
-  if (!w) {
-    alert("Enable popups to print");
+  const win = window.open("", "_blank");
+
+  if (!win) {
+    alert("Please allow popups to print bills");
     return;
   }
-  w.document.write(generatePrintHTML(bill, settings));
-  w.document.close();
-  setTimeout(() => { w.print(); w.close(); }, 250);
+
+  win.document.write(generatePrintHTML(bill, settings));
+  win.document.close();
+
+  // FIXED: allow browser rendering time
+  setTimeout(() => {
+    win.focus();
+    win.print();
+    win.close();
+  }, 600);
 }
