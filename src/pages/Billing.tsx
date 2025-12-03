@@ -24,7 +24,7 @@ import {
 
 import { getCurrentUser } from "@/lib/auth";
 import { MenuItem, BillItem, Bill, AppSettings } from "@/types";
-import { ShoppingCart, Minus, Plus, Trash2, Printer, Receipt } from "lucide-react";
+import { ShoppingCart, Minus, Plus, Trash2, Printer, Receipt, Calendar, Hash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { printBill } from "@/lib/print";
 
@@ -52,16 +52,21 @@ export default function Billing() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
 
-  const [billDate, setBillDate] = useState(new Date().toLocaleDateString("en-GB"));
+  /* DATE CONTROL */
+  const todayFull = new Date();
+  const [billDate, setBillDate] = useState(
+    todayFull.toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true })
+  );
   const [manualDate, setManualDate] = useState(false);
 
+  /* BILL NUMBER CONTROL */
   const [billNumber, setBillNumber] = useState("01");
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
 
-  /* NEW: ORDER TYPE */
+  /* ORDER TYPE */
   const [orderType, setOrderType] = useState<"dine-in" | "parcel">("dine-in");
 
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -180,7 +185,7 @@ export default function Billing() {
       createdAt: billDate,
       billDate,
       paymentMethod,
-      orderType,                     // NEW LINE
+      orderType,
       customerName: customerName || undefined,
       customerPhone: customerPhone || undefined,
       syncedToCloud: false,
@@ -204,6 +209,77 @@ export default function Billing() {
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-4xl font-bold">Billing</h1>
+
+      {/* DATE + BILL NO BUTTONS */}
+      <div className="flex gap-3 mb-3">
+
+        {/* DATE SECTION */}
+        <div className="flex items-center gap-2">
+          <Calendar className="text-muted-foreground" />
+          {manualDate ? (
+            <Input
+              type="datetime-local"
+              className="w-56"
+              onChange={(e) =>
+                setBillDate(
+                  new Date(e.target.value).toLocaleString("en-GB", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  })
+                )
+              }
+            />
+          ) : (
+            <span className="font-semibold">{billDate}</span>
+          )}
+
+          {!manualDate ? (
+            <Button variant="outline" size="sm" onClick={() => setManualDate(true)}>
+              Change Date
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                const d = new Date();
+                const auto = d.toLocaleString("en-GB", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: true,
+                });
+                setBillDate(auto);
+                setManualDate(false);
+              }}
+            >
+              Auto Date
+            </Button>
+          )}
+        </div>
+
+        {/* BILL NUMBER SECTION */}
+        <div className="flex items-center gap-2">
+          <Hash className="text-muted-foreground" />
+          <span className="font-semibold">Bill No: {billNumber}</span>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const newNo = prompt("Enter Bill Number", billNumber);
+              if (newNo) {
+                const formatted = newNo.padStart(2, "0");
+                setBillNumber(formatted);
+                setLastBillNumber(String(Number(formatted) - 1).padStart(2, "0"));
+              }
+            }}
+          >
+            Change
+          </Button>
+        </div>
+
+      </div>
 
       {/* SEARCH/CATEGORY */}
       <div className="flex gap-4">
@@ -265,6 +341,7 @@ export default function Billing() {
             <p className="text-muted-foreground text-center">Cart is empty</p>
           ) : (
             <>
+
               {/* ORDER TYPE BUTTONS */}
               <div className="flex gap-2 mb-3">
                 <Button
@@ -284,7 +361,6 @@ export default function Billing() {
                 </Button>
               </div>
 
-              {/* ITEMS */}
               <div className="space-y-2 max-h-72 overflow-y-auto">
                 {cart.map((item) => (
                   <div
@@ -316,7 +392,6 @@ export default function Billing() {
                 ))}
               </div>
 
-              {/* TOTALS */}
               <div className="space-y-1 border-t pt-3">
                 <div className="flex justify-between"><span>Subtotal</span><span>₹{subtotal.toFixed(0)}</span></div>
                 <div className="flex justify-between"><span>CGST</span><span>₹{cgst.toFixed(0)}</span></div>
@@ -326,7 +401,6 @@ export default function Billing() {
                 </div>
               </div>
 
-              {/* CUSTOMER INFO */}
               <div>
                 <Label>Customer</Label>
                 <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="mb-2" />
@@ -345,7 +419,6 @@ export default function Billing() {
                 </Select>
               </div>
 
-              {/* SAVE BUTTONS */}
               <div className="flex gap-2 mt-4">
                 <Button className="flex-1" variant="outline" onClick={() => handleSave(false)}>
                   <Receipt className="mr-2" /> Save
