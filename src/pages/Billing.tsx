@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { createBill, getSettings, getAllMenuItems } from '@/lib/db';
+import { createBill, getSettings, getAllMenuItems, getBillById } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { MenuItem, BillItem, Bill, AppSettings } from '@/types';
 import { Plus, Minus, Trash2, ShoppingCart, Printer, Receipt, Star } from 'lucide-react';
@@ -46,17 +46,59 @@ export default function Billing() {
   // Sorting
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | null>(null);
 
+  /* ----------------------- LOAD DATA + CHECK EDIT MODE ----------------------- */
   useEffect(() => {
     loadData();
     loadBillNumber();
+
+    // CHECK FOR EDIT MODE (From Reports.tsx)
+    const raw = localStorage.getItem("editBill");
+    if (raw) {
+      const bill = JSON.parse(raw);
+      loadEditBill(bill);
+    }
+
   }, []);
 
+  /* ------------------------- APPLY EDIT BILL DATA ------------------------- */
+  const loadEditBill = (bill: any) => {
+    if (!bill) return;
+
+    // RESTORE CART
+    const restoredCart = bill.items.map((i: any) => ({
+      menuItemId: i.menuItemId,
+      name: i.name,
+      price: i.price,
+      quantity: i.quantity,
+      subtotal: i.subtotal,
+    }));
+    setCart(restoredCart);
+
+    // RESTORE BILL FIELDS
+    setCustomerName(bill.customerName || "");
+    setCustomerPhone(bill.customerPhone || "");
+    setPaymentMethod(bill.paymentMethod || "cash");
+    setOrderType(bill.orderType || "dine-in");
+
+    setBillDate(bill.billDate);
+    setManualDate(true);
+
+    // BILL NUMBER (Keep same)
+    setBillNumber(bill.billNumber);
+    setLastBillNumber(String(Number(bill.billNumber) - 1).padStart(2, "0"));
+
+    // Clear storage so refresh doesn’t repeat
+    localStorage.removeItem("editBill");
+  };
+
+  /* ----------------------------- BILL NUMBER ----------------------------- */
   const loadBillNumber = () => {
     const last = getLastBillNumber();
     const next = String(Number(last) + 1).padStart(2, "0");
     setBillNumber(next);
   };
 
+  /* ----------------------------- LOAD MENU ----------------------------- */
   const loadData = async () => {
     try {
       const items = await getAllMenuItems();  
@@ -76,6 +118,7 @@ export default function Billing() {
 
   const categories = ['all', ...Array.from(new Set(menuItems.map(item => item.category)))];
 
+  /* ----------------------------- FILTERS ----------------------------- */
   const applyQuickFilter = (items: MenuItem[]) => {
 
     if (quickFilter === 'favorite') {
@@ -119,6 +162,7 @@ export default function Billing() {
       : applyQuickFilter(menuItems)
   );
 
+  /* ----------------------------- CART METHODS ----------------------------- */
   const addToCart = (item: MenuItem) => {
     const existing = cart.find(i => i.menuItemId === item.id);
 
@@ -154,6 +198,7 @@ export default function Billing() {
     setCart(cart.filter(i => i.menuItemId !== id));
   };
 
+  /* ----------------------------- TOTALS ----------------------------- */
   const calculateTotals = () => {
     const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
     const cgst = subtotal * (settings?.cgstRate || 2.5) / 100;
@@ -162,6 +207,7 @@ export default function Billing() {
     return { subtotal, cgst, sgst, total };
   };
 
+  /* ----------------------------- SAVE BILL ----------------------------- */
   const handleSaveBill = async (shouldPrint = false) => {
     if (cart.length === 0) {
       toast({ title: 'Cart Empty', description: 'Add items first', variant: 'destructive' });
@@ -222,9 +268,11 @@ export default function Billing() {
 
   const { subtotal, cgst, sgst, total } = calculateTotals();
 
+  /* ----------------------------- VEG BADGE ----------------------------- */
   const isNonVegItem = (name: string, vegType?: string) =>
     vegType === 'nonveg' || /chicken|egg/i.test(name);
 
+  /* ----------------------------- UI ----------------------------- */
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -239,7 +287,7 @@ export default function Billing() {
           {/* SEARCH + CATEGORY + DATE + BILL NUMBER */}
           <div className="flex gap-4 items-center">
 
-            {/* SMALLER SEARCH BAR */}
+            {/* SMALL SEARCH */}
             <Input
               placeholder="Search..."
               value={searchQuery}
@@ -260,7 +308,7 @@ export default function Billing() {
               </SelectContent>
             </Select>
 
-            {/* DATE BUTTONS */}
+            {/* DATE CONTROLS */}
             <div className="flex items-center gap-2">
               {manualDate ? (
                 <Input
@@ -316,7 +364,7 @@ export default function Billing() {
 
           </div>
 
-          {/* QUICK FILTER BUTTONS */}
+          {/* QUICK FILTERS */}
           <div className="flex items-center gap-2">
 
             <Button
