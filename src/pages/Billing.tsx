@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { createBill, getSettings } from '@/lib/db';   // REMOVED getAllMenuItems (we use static menu)
+import { createBill, getSettings } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { MenuItem, BillItem, Bill, AppSettings } from '@/types';
 import { Plus, Minus, Trash2, ShoppingCart, Printer, Receipt } from 'lucide-react';
@@ -126,6 +126,7 @@ export default function Billing() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
+  const [orderType, setOrderType] = useState<'dine-in' | 'parcel'>('dine-in');  // NEW
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
   const { toast } = useToast();
@@ -150,7 +151,6 @@ export default function Billing() {
 
   const loadData = async () => {
     try {
-      // LOAD STATIC MENU
       setMenuItems(STATIC_MENU);
 
       const settingsData = await getSettings();
@@ -256,6 +256,7 @@ export default function Billing() {
         createdAt: billDate,
         billDate,
         paymentMethod,
+        orderType,     // NEW FIELD
         customerName: customerName || undefined,
         customerPhone: customerPhone || undefined,
         syncedToCloud: false,
@@ -276,6 +277,7 @@ export default function Billing() {
       setCustomerName('');
       setCustomerPhone('');
       setPaymentMethod('cash');
+      setOrderType('dine-in');   // RESET
       setBillDate(today);
       setManualDate(false);
 
@@ -476,9 +478,8 @@ export default function Billing() {
 
                   <div className="space-y-3">
                     <div className="space-y-2">
-                      <Label htmlFor="customer-name">Customer Name (Optional)</Label>
+                      <Label>Customer Name (Optional)</Label>
                       <Input
-                        id="customer-name"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
                         placeholder="Enter customer name"
@@ -486,17 +487,17 @@ export default function Billing() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="customer-phone">Phone (Optional)</Label>
+                      <Label>Phone (Optional)</Label>
                       <Input
-                        id="customer-phone"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
                         placeholder="Enter phone number"
                       />
                     </div>
 
+                    {/* PAYMENT METHOD */}
                     <div className="space-y-2">
-                      <Label htmlFor="payment-method">Payment Method</Label>
+                      <Label>Payment Method</Label>
                       <Select value={paymentMethod} onValueChange={(value: any) => setPaymentMethod(value)}>
                         <SelectTrigger>
                           <SelectValue />
@@ -505,6 +506,20 @@ export default function Billing() {
                           <SelectItem value="cash">Cash</SelectItem>
                           <SelectItem value="card">Card</SelectItem>
                           <SelectItem value="upi">UPI</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* NEW: DINE-IN OR PARCEL */}
+                    <div className="space-y-2">
+                      <Label>Order Type</Label>
+                      <Select value={orderType} onValueChange={(value: any) => setOrderType(value)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="dine-in">Dine-In</SelectItem>
+                          <SelectItem value="parcel">Parcel</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
