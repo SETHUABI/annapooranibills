@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getAllBills, getSettings, createBill } from "@/lib/db";
+import { getAllBills, getSettings, createBill, deleteBill } from "@/lib/db";
 import { Bill, AppSettings } from "@/types";
 import {
   Download,
@@ -398,6 +398,21 @@ export default function Reports() {
 
                       <TableCell className="text-right flex gap-2 justify-end">
 
+                        {/* VIEW BUTTON */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (settings) {
+                              const win = window.open("", "_blank");
+                              win.document.write(generatePrintHTML(bill, settings));
+                              win.document.close();
+                            }
+                          }}
+                        >
+                          View
+                        </Button>
+
                         {/* PRINT BUTTON */}
                         <Button
                           variant="outline"
@@ -418,7 +433,7 @@ export default function Reports() {
                           Print
                         </Button>
 
-                        {/* ⭐ NEW — EDIT BILL BUTTON */}
+                        {/* EDIT BUTTON */}
                         <Button
                           variant="default"
                           size="sm"
@@ -430,6 +445,32 @@ export default function Reports() {
                         >
                           <Pencil className="h-4 w-4 mr-1" />
                           Edit
+                        </Button>
+
+                        {/* DELETE BUTTON */}
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={async () => {
+                            if (!confirm("Delete this bill?")) return;
+
+                            try {
+                              await deleteBill(bill.id);
+                              toast({
+                                title: "Deleted",
+                                description: "Bill removed successfully",
+                              });
+                              loadData();
+                            } catch {
+                              toast({
+                                title: "Error",
+                                description: "Failed to delete bill",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                        >
+                          Delete
                         </Button>
 
                       </TableCell>
