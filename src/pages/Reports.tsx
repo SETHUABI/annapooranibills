@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { exportBillsToExcel, exportBillsToCSV } from "@/lib/export";
 import { useToast } from "@/hooks/use-toast";
-import { printBill } from "@/lib/print";
+import { generatePrintHTML } from "@/lib/print";
 import * as XLSX from "xlsx";
 
 import {
@@ -23,10 +23,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-/* ------------------------------------------------------ */
-/*                    MAIN COMPONENT                      */
-/* ------------------------------------------------------ */
 
 export default function Reports() {
   const [bills, setBills] = useState<Bill[]>([]);
@@ -39,10 +35,7 @@ export default function Reports() {
 
   const { toast } = useToast();
 
-  /* ------------------------------------------------------ */
-  /*                    LOAD DATA                           */
-  /* ------------------------------------------------------ */
-
+  /* ------------------------------ LOAD DATA ------------------------------ */
   useEffect(() => {
     loadData();
   }, []);
@@ -54,11 +47,7 @@ export default function Reports() {
         getSettings(),
       ]);
 
-      // Sort newest → oldest
-      billsData.sort(
-        (a, b) =>
-          parseDate(b.createdAt) - parseDate(a.createdAt)
-      );
+      billsData.sort((a, b) => parseDate(b.createdAt) - parseDate(a.createdAt));
 
       setBills(billsData);
       setSettings(settingsData || null);
@@ -71,31 +60,22 @@ export default function Reports() {
     }
   };
 
-  /* ------------------------------------------------------ */
-  /*               FIXED DATE PARSING (DD/MM/YYYY)          */
-  /* ------------------------------------------------------ */
-
+  /* ------------------------------ DATE PARSE ------------------------------ */
   const parseDate = (d: string): number => {
     if (!d) return 0;
 
-    // Case 1: Already ISO string "2025-12-03T11:00"
     if (d.includes("T")) return new Date(d).getTime();
 
-    // Case 2: "03/12/2025" (dd/mm/yyyy)
     const parts = d.split("/");
     if (parts.length === 3) {
       const [day, month, year] = parts.map(Number);
       return new Date(year, month - 1, day).getTime();
     }
 
-    // Fallback
     return new Date(d).getTime();
   };
 
-  /* ------------------------------------------------------ */
-  /*                  FILTERING LOGIC                       */
-  /* ------------------------------------------------------ */
-
+  /* ------------------------------ FILTER ------------------------------ */
   const getFilteredBills = () => {
     const now = new Date();
     const todayStart = new Date(
@@ -129,19 +109,13 @@ export default function Reports() {
 
   const filteredBills = getFilteredBills();
 
-  /* ------------------------------------------------------ */
-  /*                      SUMMARY                           */
-  /* ------------------------------------------------------ */
-
+  /* ------------------------------ SUMMARY ------------------------------ */
   const totalSales = filteredBills.reduce((t, b) => t + b.total, 0);
   const totalItems = filteredBills.reduce((t, b) => t + b.items.length, 0);
   const avgBillValue =
     filteredBills.length > 0 ? totalSales / filteredBills.length : 0;
 
-  /* ------------------------------------------------------ */
-  /*                       EXPORT                           */
-  /* ------------------------------------------------------ */
-
+  /* ------------------------------ EXPORT ------------------------------ */
   const handleExportExcel = () => {
     exportBillsToExcel(
       filteredBills,
@@ -158,10 +132,7 @@ export default function Reports() {
     toast({ title: "Done", description: "CSV exported" });
   };
 
-  /* ------------------------------------------------------ */
-  /*                     IMPORT EXCEL                       */
-  /* ------------------------------------------------------ */
-
+  /* ------------------------------ IMPORT ------------------------------ */
   const handleImportExcel = async (event: any) => {
     try {
       const file = event.target.files[0];
@@ -204,8 +175,8 @@ export default function Reports() {
 
             await createBill(bill);
             saved++;
-          } catch (err) {
-            console.error("Bad row:", err);
+          } catch {
+            console.error("Bad row");
           }
         }
 
@@ -227,10 +198,7 @@ export default function Reports() {
     }
   };
 
-  /* ------------------------------------------------------ */
-  /*             PRINT BILLS FOR DATE RANGE                 */
-  /* ------------------------------------------------------ */
-
+  /* ------------------------------ PRINT RANGE ------------------------------ */
   const handlePrintRange = () => {
     if (!fromDate || !toDate) {
       return toast({
@@ -241,8 +209,7 @@ export default function Reports() {
     }
 
     const start = new Date(fromDate).getTime();
-    const end =
-      new Date(toDate).getTime() + 24 * 60 * 60 * 1000;
+    const end = new Date(toDate).getTime() + 24 * 60 * 60 * 1000;
 
     const list = bills.filter((b) => {
       const t = parseDate(b.createdAt);
@@ -256,12 +223,26 @@ export default function Reports() {
       });
     }
 
-    const html = list
-      .map((b) => printBillHTML(b, settings!))
-      .join('<div style="page-break-after: always;"></div>');
+    if (!settings) {
+      return toast({
+        title: "Error",
+        description: "Settings not loaded",
+        variant: "destructive",
+      });
+    }
+
+    let fullHTML = "";
+
+    list.forEach((bill, index) => {
+      fullHTML += generatePrintHTML(bill, settings);
+
+      if (index !== list.length - 1) {
+        fullHTML += `<div style="page-break-after: always; margin:30px 0;"></div>`;
+      }
+    });
 
     const win = window.open("", "_blank");
-    win.document.write(html);
+    win.document.write(fullHTML);
     win.document.close();
 
     setTimeout(() => {
@@ -270,16 +251,10 @@ export default function Reports() {
     }, 300);
   };
 
-  const printBillHTML = (bill: Bill, settings: AppSettings) =>
-    printBill(bill, settings);
-
-  /* ------------------------------------------------------ */
-  /*                      UI RENDER                         */
-  /* ------------------------------------------------------ */
-
+  /* ------------------------------ UI ------------------------------ */
   return (
     <div className="p-6 space-y-6">
-      {/* HEADER SECTION */}
+      {/* HEADER */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-bold">Reports</h1>
@@ -303,7 +278,6 @@ export default function Reports() {
             Refresh
           </Button>
 
-          {/* IMPORT */}
           <label className="cursor-pointer">
             <div className="flex items-center px-3 py-2 border rounded">
               <Upload className="h-4 w-4 mr-2" /> Import
@@ -317,7 +291,7 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* PERIOD SELECTION */}
+      {/* PERIOD BUTTONS */}
       <div className="flex gap-2">
         {(["today", "week", "month", "all"] as const).map((p) => (
           <Button
@@ -439,7 +413,17 @@ export default function Reports() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => printBill(bill, settings!)}
+                          onClick={() => {
+                            if (settings) {
+                              const w = window.open("", "_blank");
+                              w.document.write(generatePrintHTML(bill, settings));
+                              w.document.close();
+                              setTimeout(() => {
+                                w.print();
+                                w.close();
+                              }, 250);
+                            }
+                          }}
                         >
                           <Printer className="h-4 w-4 mr-1" />
                           Print
