@@ -30,9 +30,12 @@ export default function Dashboard() {
     }
   };
 
-  // Calculate today's stats
-  const today = new Date().toISOString().split('T')[0];
-  const todaysBills = bills.filter(bill => bill.createdAt.startsWith(today));
+  // FIXED: USE DD/MM/YYYY (matches Billing screen)
+  const today = new Date().toLocaleDateString("en-GB");
+
+  // FIXED: Exact match since bills save date as "DD/MM/YYYY"
+  const todaysBills = bills.filter(bill => bill.createdAt === today);
+
   const todaysSales = todaysBills.reduce((sum, bill) => sum + bill.total, 0);
   const totalSales = bills.reduce((sum, bill) => sum + bill.total, 0);
   const availableItems = menuItems.filter(item => item.isAvailable).length;
@@ -128,7 +131,7 @@ export default function Dashboard() {
                     <div>
                       <p className="font-semibold">{bill.billNumber}</p>
                       <p className="text-sm text-muted-foreground">
-                        {new Date(bill.createdAt).toLocaleTimeString()}
+                        {bill.createdAt}
                       </p>
                     </div>
                     <div className="text-right">
