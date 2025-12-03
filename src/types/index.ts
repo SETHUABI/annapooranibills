@@ -31,21 +31,35 @@ export interface BillItem {
   subtotal: number;
 }
 
+/* FIXED — FINAL BILL INTERFACE */
 export interface Bill {
   id: string;
   billNumber: string;
-  items: BillItem[];
+
+  // For displaying on screen
+  billDate?: string;
+
+  // ISO date stored for printing
+  createdAt: string;
+
+  createdBy: string;
+  createdByName: string;
+
+  // DINE-IN or PARCEL
+  orderType: "dine-in" | "parcel";
+
+  paymentMethod?: "cash" | "card" | "upi";
+  customerName?: string;
+  customerPhone?: string;
+  notes?: string;
+
   subtotal: number;
   cgst: number;
   sgst: number;
   total: number;
-  createdBy: string;
-  createdByName: string;
-  createdAt: string;
-  paymentMethod?: 'cash' | 'card' | 'upi';
-  customerName?: string;
-  customerPhone?: string;
-  notes?: string;
+
+  items: BillItem[];
+
   syncedToCloud: boolean;
 }
 
@@ -57,8 +71,8 @@ export interface AppSettings {
   shopEmail?: string;
   cgstRate: number;
   sgstRate: number;
-  printerFormat: '58mm' | '80mm';
-  theme: 'light' | 'dark';
+  printerFormat: "58mm" | "80mm";
+  theme: "light" | "dark";
   googleSheetsUrl?: string;
   autoSync: boolean;
   currency: string;
